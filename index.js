@@ -21,7 +21,6 @@ const {
 
 const http = require("http");
 
-const ffmpegPath = require("ffmpeg-static");
 const fs = require("fs");
 const path = require("path");
 
@@ -152,9 +151,6 @@ http.createServer((req, res) => {
 
 }).listen(process.env.PORT || 3000);
 
-client.queues = new Map();
-require("./events/lavalink")(client);
-
 client.commands = new Collection();
 const cooldowns = new Collection();
 
@@ -169,7 +165,7 @@ const eventFiles = fs
     .filter(file => file.endsWith(".js"));
 
 for (const file of eventFiles) {
-    if (file === "lavalink.js") continue;
+    if (["lavalink.js", "musicButtons.js", "musicPanel.js"].includes(file)) continue;
 
     const filePath = path.join(eventPath, file);
     const event = require(filePath);
@@ -189,6 +185,8 @@ const foldersPath = path.join(__dirname, "commands");
 const commandFolders = fs.readdirSync(foldersPath);
 
 for (const folder of commandFolders) {
+    if (folder === "music") continue;
+
     const commandsPath = path.join(foldersPath, folder);
 
     if (!fs.statSync(commandsPath).isDirectory()) continue;
