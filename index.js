@@ -668,21 +668,6 @@ if (matchedPrefix) {
     });
 });
 
-// =========================
-// LOGIN
-// =========================
-
-client
-    .login(process.env.TOKEN)
-    .then(() => {
-        console.log("✅ Discord login successful");
-    })
-    .catch((err) => {
-        console.error(
-            "❌ DISCORD LOGIN ERROR:",
-            err?.message || String(err)
-        );
-    });
 
 // =========================
 // REGISTER SLASH COMMANDS
@@ -716,3 +701,20 @@ client.once("clientReady", async () => {
         console.error("❌ Slash registration error:", error);
     }
 });
+
+
+// =========================
+// LOGIN
+// =========================
+
+client
+    .login(process.env.TOKEN)
+    .then(() => {
+        console.log("✅ Discord login successful");
+    })
+    .catch((err) => {
+        console.error(
+            "❌ DISCORD LOGIN ERROR:",
+            err?.message || String(err)
+        );
+    });
