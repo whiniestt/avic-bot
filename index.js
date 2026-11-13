@@ -683,3 +683,36 @@ client
             err?.message || String(err)
         );
     });
+
+// =========================
+// REGISTER SLASH COMMANDS
+// =========================
+
+client.once("clientReady", async () => {
+    try {
+        const guildId = process.env.GUILD_ID;
+
+        const existing = await client.application.commands.fetch(
+            guildId ? { guildId } : {}
+        );
+
+        const commands = [
+            ...existing
+                .filter(command => command.name !== "react")
+                .map(command => command.toJSON()),
+
+            ...client.slashCommands.map(command =>
+                command.data.toJSON()
+            )
+        ];
+
+        await client.application.commands.set(
+            commands,
+            guildId
+        );
+
+        console.log("✅ Slash commands registered successfully.");
+    } catch (error) {
+        console.error("❌ Slash registration error:", error);
+    }
+});
