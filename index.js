@@ -174,6 +174,37 @@ if (fs.existsSync(slashPath)) {
 }
 
 // =========================
+// SLASH COMMAND HANDLER
+// =========================
+
+client.on("interactionCreate", async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const command = client.slashCommands.get(
+        interaction.commandName
+    );
+
+    if (!command) return;
+
+    try {
+        await command.execute(interaction, client);
+    } catch (error) {
+        console.error("SLASH COMMAND ERROR:", error);
+
+        const reply = {
+            content: "❌ Something went wrong while executing this command.",
+            ephemeral: true
+        };
+
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply(reply).catch(() => {});
+        } else {
+            await interaction.reply(reply).catch(() => {});
+        }
+    }
+});
+
+// =========================
 // EVENT LOADER
 // =========================
 
