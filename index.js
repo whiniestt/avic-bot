@@ -155,6 +155,25 @@ client.commands = new Collection();
 const cooldowns = new Collection();
 
 // =========================
+// SLASH COMMAND LOADER
+// =========================
+
+client.slashCommands = new Collection();
+
+const slashPath = path.join(__dirname, "commands", "slash");
+
+if (fs.existsSync(slashPath)) {
+    const slashFiles = fs.readdirSync(slashPath)
+        .filter(file => file.endsWith(".js"));
+
+    for (const file of slashFiles) {
+        const command = require(path.join(slashPath, file));
+
+        client.slashCommands.set(command.data.name, command);
+    }
+}
+
+// =========================
 // EVENT LOADER
 // =========================
 
