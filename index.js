@@ -269,27 +269,22 @@ client.once("clientReady", () => {
 
     require("./events/giveawayManager")(client);
 
-    // =========================
+// =========================
 // FARE STATUS (5 MIN REFRESH)
 // =========================
 
 const updateStatus = () => {
-    const users = client.guilds.cache.reduce(
-        (total, guild) => total + (guild.memberCount || 0),
-        0
-    );
-
     client.user.setPresence({
         status: "dnd",
         activities: [
             {
-                name: `${users} users on Fare Waves`,
-                type: 3
+                name: "Join dsc.gg/shibuyafr now!",
+                type: 4
             }
         ]
     });
 
-    console.log(`🔄 Activity updated: ${users} users`);
+    console.log("🔄 Activity updated: Shibuya invite");
 };
 
 updateStatus();
