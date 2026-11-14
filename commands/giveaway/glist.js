@@ -1,8 +1,5 @@
 const { EmbedBuilder } = require("discord.js");
-const { QuickDB } = require("quick.db");
-
-const db = new QuickDB();
-
+const db = require("../../database");
 module.exports = {
     name: "glist",
     aliases: ["giveawaylist"],
