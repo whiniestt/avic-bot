@@ -274,27 +274,31 @@ client.once("clientReady", () => {
     require("./events/giveawayManager")(client);
 
     // =========================
-    // SINGLE FARE STATUS
-    // =========================
+// FARE STATUS (5 MIN REFRESH)
+// =========================
 
-    const updateStatus = () => {
-        const users = client.guilds.cache.reduce(
-            (total, guild) => total + guild.memberCount,
-            0
-        );
+const updateStatus = () => {
+    const users = client.guilds.cache.reduce(
+        (total, guild) => total + (guild.memberCount || 0),
+        0
+    );
 
-        client.user.setPresence({
-            status: "dnd",
-            activities: [
-                {
-                    name: `${users} users on Fare Waves`,
-                    type: 3
-                }
-            ]
-        });
-    };
+    client.user.setPresence({
+        status: "dnd",
+        activities: [
+            {
+                name: `${users} users on Fare Waves`,
+                type: 3
+            }
+        ]
+    });
 
-    updateStatus();
+    console.log(`🔄 Activity updated: ${users} users`);
+};
+
+updateStatus();
+
+setInterval(updateStatus, 5 * 60 * 1000);
 
     // =========================
     // MESSAGE CREATE
