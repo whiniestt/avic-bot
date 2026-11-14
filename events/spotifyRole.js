@@ -1,6 +1,6 @@
 const { ActivityType } = require("discord.js");
 const { QuickDB } = require("quick.db");
-const db = new QuickDB();
+const db = require(process.cwd() + "/database");
 
 module.exports = (client) => {
     client.on("presenceUpdate", async (oldPresence, newPresence) => {

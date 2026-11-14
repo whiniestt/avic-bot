@@ -1,6 +1,6 @@
 const { PermissionsBitField, EmbedBuilder } = require("discord.js");
 const { QuickDB } = require("quick.db");
-const db = new QuickDB();
+const db = require(process.cwd() + "/database");
 
 function embed(text, color = "#D3D3D3") {
     return new EmbedBuilder().setColor(color).setDescription(`<:WarningIcon:1514708751385497721> ${text}`);

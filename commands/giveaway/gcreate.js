@@ -6,7 +6,7 @@ const {
 const { QuickDB } = require("quick.db");
 const ms = require("ms");
 
-const db = new QuickDB();
+const db = require(process.cwd() + "/database");
 
 module.exports = {
     name: "gcreate",

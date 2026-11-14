@@ -7,7 +7,7 @@ const {
 
 const { QuickDB } = require("quick.db");
 
-const db = new QuickDB();
+const db = require(process.cwd() + "/database");
 
 const OWNER_ID = "1530872106399567941";
 

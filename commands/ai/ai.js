@@ -2,7 +2,7 @@ const { EmbedBuilder } = require("discord.js");
 const { QuickDB } = require("quick.db");
 const { GoogleGenAI } = require("@google/genai");
 
-const db = new QuickDB();
+const db = require(process.cwd() + "/database");
 const cooldown = new Map();
 
 const ai = new GoogleGenAI({

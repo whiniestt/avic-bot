@@ -1,6 +1,6 @@
 const { QuickDB } = require("quick.db");
 
-const db = new QuickDB();
+const db = require(process.cwd() + "/database");
 
 module.exports = {
 
