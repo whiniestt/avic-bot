@@ -24,11 +24,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
-const { QuickDB } = require("quick.db");
-
-const db = new QuickDB({
-    filePath: "/data/json.sqlite"
-});
+const db = require("./database");
 
 setInterval(() => {
     const mem = process.memoryUsage();
