@@ -593,17 +593,23 @@ if (matchedPrefix) {
         // COOLDOWN
         // =========================
 
-        const cooldown = 5000;
+        const isCustomizeMenu =
+            command.name === "customize" &&
+            (!args[0] || args[0].toLowerCase() === "help");
+        const cooldown = isCustomizeMenu ? 10000 : 5000;
+        const cooldownKey = command.name === "customize"
+            ? (isCustomizeMenu ? "customize:menu" : "customize:action")
+            : command.name;
 
-        if (!cooldowns.has(command.name)) {
+        if (!cooldowns.has(cooldownKey)) {
             cooldowns.set(
-                command.name,
+                cooldownKey,
                 new Collection()
             );
         }
 
         const now = Date.now();
-        const timestamps = cooldowns.get(command.name);
+        const timestamps = cooldowns.get(cooldownKey);
 
         if (timestamps.has(message.author.id)) {
             const expirationTime =
