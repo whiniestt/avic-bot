@@ -54,7 +54,7 @@ function createRemovalPayload(guild, client) {
   const embed = new EmbedBuilder()
     .setColor(EMBED_COLOR)
     .setDescription(
-      `<:greydot:1572958848132587530> Fare has been removed from **${guild.name}**.`
+      `<:greydot:1572958848132587530> Fare is no longer in **${guild.name}**.`
     )
     .setThumbnail(botIcon)
     .setFooter({ text: 'By Fare Development', iconURL: botIcon })
