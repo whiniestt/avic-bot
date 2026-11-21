@@ -315,7 +315,8 @@ async function promptForReset(interaction, client, menuProfile) {
       new StringSelectMenuOptionBuilder().setLabel('Nickname').setValue('nick'),
       new StringSelectMenuOptionBuilder().setLabel('Avatar').setValue('avatar'),
       new StringSelectMenuOptionBuilder().setLabel('Banner').setValue('banner'),
-      new StringSelectMenuOptionBuilder().setLabel('Bio').setValue('bio')
+      new StringSelectMenuOptionBuilder().setLabel('Bio').setValue('bio'),
+      new StringSelectMenuOptionBuilder().setLabel('All').setValue('all')
     );
   const prompt = new ContainerBuilder()
     .setAccentColor(0xD3D3D3)
@@ -343,14 +344,27 @@ async function promptForReset(interaction, client, menuProfile) {
   }
 
   const target = selection.values[0];
-  const labels = { nick: 'nickname', avatar: 'avatar', banner: 'banner', bio: 'bio' };
+  const labels = {
+    nick: 'nickname',
+    avatar: 'avatar',
+    banner: 'banner',
+    bio: 'bio',
+    all: 'all profile settings'
+  };
+  const resetBodies = {
+    nick: { nick: null },
+    avatar: { avatar: null },
+    banner: { banner: null },
+    bio: { bio: null },
+    all: { nick: null, avatar: null, banner: null, bio: null }
+  };
   if (!Object.hasOwn(labels, target)) {
     return selection.update(componentMessage('That reset option is no longer available.', 0xED4245, true));
   }
 
   try {
     await selection.deferUpdate();
-    await updateServerProfile(client, interaction.guild.id, { [target]: null });
+    await updateServerProfile(client, interaction.guild.id, resetBodies[target]);
     await refreshCustomizeMenu(
       interaction.message,
       interaction.guild,
