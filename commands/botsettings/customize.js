@@ -212,7 +212,7 @@ function getPrefix(message) {
   return suffix ? commandToken.slice(0, -suffix[0].length) : ',';
 }
 
-function profileMenuContainer(guild, profile, user) {
+function profileMenuContainer(guild, profile, user, botAvatarUrl) {
   const status = value => value ? 'Custom' : 'Default';
   const profileText =
     `**Nickname:** ${profile.nick || 'Default'}\n` +
@@ -220,15 +220,14 @@ function profileMenuContainer(guild, profile, user) {
     `**Banner:** ${status(profile.banner)}\n` +
     `**Bio:** ${status(profile.bio)}`;
 
-  const iconUrl = guild.iconURL({ extension: 'png', size: 256 });
   const container = new ContainerBuilder().setAccentColor(0xD3D3D3);
-  if (iconUrl) {
+  if (botAvatarUrl) {
     const section = new SectionBuilder()
       .addTextDisplayComponents(
         text(`## My look in ${guild.name}`),
         text(profileText)
       )
-      .setThumbnailAccessory(new ThumbnailBuilder().setURL(iconUrl));
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL(botAvatarUrl));
     container.addSectionComponents(section);
   } else {
     container.addTextDisplayComponents(
@@ -404,8 +403,19 @@ async function showMenu(message, client) {
     console.error('SERVER PROFILE READ ERROR:', error?.message || error);
   }
 
+  let botMember = message.guild.members.me;
+  if (!botMember) {
+    try {
+      botMember = await message.guild.members.fetchMe();
+    } catch (error) {
+      console.error('SERVER BOT MEMBER FETCH ERROR:', error?.message || error);
+    }
+  }
+  const botAvatarUrl = botMember?.displayAvatarURL({ extension: 'png', size: 256 }) ||
+    client.user.displayAvatarURL({ extension: 'png', size: 256 });
+
   const sent = await message.reply({
-    components: [profileMenuContainer(message.guild, profile, message.author)],
+    components: [profileMenuContainer(message.guild, profile, message.author, botAvatarUrl)],
     flags: V2,
     allowedMentions: NO_PINGS
   });
