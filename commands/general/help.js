@@ -233,6 +233,7 @@ module.exports = {
       );
 
       return new ContainerBuilder()
+        .setAccentColor(0xD3D3D3)
         .addMediaGalleryComponents(
           new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(BANNER_URL))
         )
@@ -270,7 +271,9 @@ module.exports = {
     // =========================
     const loadingMsg = await message.reply({
       components: [
-        new ContainerBuilder().addTextDisplayComponents(
+        new ContainerBuilder()
+          .setAccentColor(0xD3D3D3)
+          .addTextDisplayComponents(
           text('<a:clockk:1514734530282520647> **Just A Moment.**')
         )
       ],
@@ -313,7 +316,9 @@ module.exports = {
 
       if (!cat) {
         return interaction.reply({
-          components: [new ContainerBuilder().addTextDisplayComponents(text('Category under development.'))],
+          components: [new ContainerBuilder()
+            .setAccentColor(0xD3D3D3)
+            .addTextDisplayComponents(text('Category under development.'))],
           flags: V2 | MessageFlags.Ephemeral
         });
       }
@@ -327,6 +332,7 @@ module.exports = {
       return interaction.reply({
         components: [
           new ContainerBuilder()
+            .setAccentColor(0xD3D3D3)
             .addTextDisplayComponents(text(`### ${cat.e} ${cat.title}`))
             .addSeparatorComponents(divider())
             .addTextDisplayComponents(text(body))
