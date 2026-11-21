@@ -328,7 +328,7 @@ function imageModal(action, interactionId) {
     .setFileTypes('image');
   const uploadLabel = new LabelBuilder()
     .setLabel(action === 'avatar' ? 'Upload an avatar' : 'Upload a banner')
-    .setDescription('Choose an image file from your device.')
+    .setDescription('Choose a PNG, JPG, WEBP, or GIF image (8 MB max).')
     .setFileUploadComponent(fileUpload);
 
   const imageLink = new TextInputBuilder()
