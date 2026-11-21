@@ -13,6 +13,8 @@ const {
   SectionBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   TextDisplayBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -266,7 +268,7 @@ function menuRows(userId) {
     ),
     new ActionRowBuilder().addComponents(
       button('nick', 'Nickname'),
-      button('reset', 'Reset all', ButtonStyle.Danger)
+      button('reset', 'Reset', ButtonStyle.Danger)
     ),
     new ActionRowBuilder().addComponents(
       button('sync', 'Sync with server', ButtonStyle.Primary)
@@ -299,8 +301,77 @@ function getServerBotAvatarUrl(botMember, client) {
     client.user.displayAvatarURL({ extension: 'png', size: 256 });
 }
 
-function getServerBotBannerUrl(botMember) {
-  return botMember?.bannerURL({ extension: 'png', size: 1024 }) || null;
+function getServerBotBannerUrl(botMember, client) {
+  return botMember?.displayBannerURL({ extension: 'png', size: 1024 }) ||
+    client.user.bannerURL({ extension: 'png', size: 1024 }) || null;
+}
+
+async function promptForReset(interaction, client, menuProfile) {
+  const selectCustomId = `fare_customize_reset:${interaction.id}`;
+  const resetSelect = new StringSelectMenuBuilder()
+    .setCustomId(selectCustomId)
+    .setPlaceholder('Choose what to reset')
+    .addOptions(
+      new StringSelectMenuOptionBuilder().setLabel('Nickname').setValue('nick'),
+      new StringSelectMenuOptionBuilder().setLabel('Avatar').setValue('avatar'),
+      new StringSelectMenuOptionBuilder().setLabel('Banner').setValue('banner'),
+      new StringSelectMenuOptionBuilder().setLabel('Bio').setValue('bio')
+    );
+  const prompt = new ContainerBuilder()
+    .setAccentColor(0xD3D3D3)
+    .addTextDisplayComponents(text('## What do you want to reset?'))
+    .addActionRowComponents(new ActionRowBuilder().addComponents(resetSelect));
+
+  await interaction.reply({
+    components: [prompt],
+    flags: V2 | MessageFlags.Ephemeral,
+    allowedMentions: NO_PINGS
+  });
+
+  const promptMessage = await interaction.fetchReply();
+  let selection;
+  try {
+    selection = await promptMessage.awaitMessageComponent({
+      time: MENU_TIMEOUT_MS,
+      filter: component =>
+        component.customId === selectCustomId &&
+        component.user.id === interaction.user.id
+    });
+  } catch {
+    await promptMessage.edit({ components: [] }).catch(() => {});
+    return;
+  }
+
+  const target = selection.values[0];
+  const labels = { nick: 'nickname', avatar: 'avatar', banner: 'banner', bio: 'bio' };
+  if (!Object.hasOwn(labels, target)) {
+    return selection.update(componentMessage('That reset option is no longer available.', 0xED4245, true));
+  }
+
+  try {
+    await selection.deferUpdate();
+    await updateServerProfile(client, interaction.guild.id, { [target]: null });
+    await refreshCustomizeMenu(
+      interaction.message,
+      interaction.guild,
+      interaction.user,
+      client,
+      menuProfile,
+      target
+    );
+    return selection.followUp(componentMessage(
+      successText(`<@${interaction.user.id}>: Reset my server ${labels[target]}.`),
+      0x57F287,
+      true
+    ));
+  } catch (error) {
+    console.error('SERVER PROFILE RESET ERROR:', error);
+    return selection.followUp(componentMessage(
+      errorText('Discord could not reset that server-profile setting.'),
+      0xED4245,
+      true
+    ));
+  }
 }
 
 async function refreshCustomizeMenu(menuMessage, guild, user, client, previousProfile, changedAction) {
@@ -313,7 +384,7 @@ async function refreshCustomizeMenu(menuMessage, guild, user, client, previousPr
 
   const botMember = await getServerBotMember(guild, true);
   const botAvatarUrl = getServerBotAvatarUrl(botMember, client);
-  const botBannerUrl = getServerBotBannerUrl(botMember);
+  const botBannerUrl = getServerBotBannerUrl(botMember, client);
   try {
     await menuMessage.edit({
       components: [profileMenuContainer(guild, profile, user, botAvatarUrl, botBannerUrl)],
@@ -463,7 +534,7 @@ async function showMenu(message, client) {
 
   const botMember = await getServerBotMember(message.guild);
   const botAvatarUrl = getServerBotAvatarUrl(botMember, client);
-  const botBannerUrl = getServerBotBannerUrl(botMember);
+  const botBannerUrl = getServerBotBannerUrl(botMember, client);
 
   const sent = await message.reply({
     components: [profileMenuContainer(message.guild, profile, message.author, botAvatarUrl, botBannerUrl)],
@@ -546,17 +617,7 @@ async function showMenu(message, client) {
       }
 
       if (action === 'reset') {
-        await updateServerProfile(client, interaction.guild.id, {
-          avatar: null,
-          banner: null,
-          bio: null,
-          nick: null
-        });
-        return interaction.reply(componentMessage(
-          successText(`<@${interaction.user.id}>: Reset my look in this server.`),
-          0x57F287,
-          true
-        ));
+        return promptForReset(interaction, client, profile);
       }
 
       return interaction.reply(componentMessage(
