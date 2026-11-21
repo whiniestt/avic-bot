@@ -7,7 +7,7 @@ const {
   PermissionFlagsBits
 } = require('discord.js');
 
-const EMBED_COLOR = 0x4B5563;
+const EMBED_COLOR = 0x3D4752;
 const SUPPORT_URL = 'https://discord.gg/R5CRRPaBhA';
 const WEBSITE_URL = 'https://farewaves.vercel.app/';
 const AUDIT_LOG_RETRY_DELAY_MS = 1500;
