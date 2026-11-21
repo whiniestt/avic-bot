@@ -27,7 +27,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
   'image/gif'
 ]);
 const MENU_ACTION_COOLDOWN_MS = 10_000;
-const MENU_TIMEOUT_MS = 10 * 60 * 1000;
+const MENU_TIMEOUT_MS = 5 * 60 * 1000;
 const V2 = MessageFlags.IsComponentsV2;
 const NO_PINGS = { parse: [], repliedUser: false };
 const text = content => new TextDisplayBuilder().setContent(content);
