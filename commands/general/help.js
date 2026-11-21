@@ -136,7 +136,7 @@ const CATEGORIES = [
     key: 'botsettings', label: 'Bot Settings', d: 'bot settings', e: '<:bot1:1514699532686852227>', title: 'Bot Settings',
     sections: [
       ['Profile', L('profile|profileedit')],
-      ['Branding', L('customize|customize bio|customize avatar|customize banner|customize sync|customize reset|customize nick')],
+      ['Branding', L('customize')],
       ['Prefix', L('prefix|prefix show|prefix set|prefix add|prefix reset|prefix remove')]
     ]
   },

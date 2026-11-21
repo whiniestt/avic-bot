@@ -59,25 +59,6 @@ function successText(content) {
   return `<:Tick:1514714190500335677> ${content}`;
 }
 
-function helpContainer(prefix = ',') {
-  const command = `${prefix}customize`;
-  return new ContainerBuilder()
-    .setAccentColor(0xD3D3D3)
-    .addTextDisplayComponents(text('## Fare Customize'))
-    .addSeparatorComponents(divider())
-    .addTextDisplayComponents(text(
-      'These settings affect Fare only in this server. Its global Discord profile will not change.\n\n' +
-      `\`${command}\` — show the profile and action menu\n` +
-      `\`${command} avatar [image link]\` — set the server avatar (or attach an image)\n` +
-      `\`${command} banner [image link]\` — set the server banner (or attach an image)\n` +
-      `\`${command} bio <text>\` — set the server bio\n` +
-      `\`${command} sync\` — match the server name and icon; use its banner when available\n` +
-      `\`${command} nick <name>\` — set the bot’s nickname in this server\n` +
-      `\`${command} reset <all|bio|avatar|banner|nick>\` — reset server-profile settings\n\n` +
-      '-# Avatar/banner images must be PNG, JPG, WEBP, or GIF and 8 MB or smaller.'
-    ));
-}
-
 function publicIPv4(address) {
   const octets = address.split('.').map(Number);
   if (octets.length !== 4 || octets.some(value => value < 0 || value > 255)) {
@@ -479,7 +460,76 @@ function imageModal(action, interactionId) {
   return modal.addLabelComponents(uploadLabel, linkLabel);
 }
 
-async function promptForImage(interaction, action, client, prefix = ',', menuProfile = {}) {
+function profileTextModal(action, interactionId) {
+  const isBio = action === 'bio';
+  const input = new TextInputBuilder()
+    .setCustomId('customize_profile_text')
+    .setStyle(isBio ? TextInputStyle.Paragraph : TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(isBio ? 190 : 32)
+    .setPlaceholder(isBio ? 'Enter Fare’s server bio' : 'Enter Fare’s server nickname');
+  const label = new LabelBuilder()
+    .setLabel(isBio ? 'Server bio' : 'Server nickname')
+    .setTextInputComponent(input);
+
+  return new ModalBuilder()
+    .setCustomId(`fare_customize_text:${interactionId}`)
+    .setTitle(isBio ? 'Set server bio' : 'Set server nickname')
+    .addLabelComponents(label);
+}
+
+async function promptForText(interaction, action, client, menuProfile) {
+  const modalCustomId = `fare_customize_text:${interaction.id}`;
+  await interaction.showModal(profileTextModal(action, interaction.id));
+
+  let submitted;
+  try {
+    submitted = await interaction.awaitModalSubmit({
+      time: MENU_TIMEOUT_MS,
+      filter: modalInteraction =>
+        modalInteraction.customId === modalCustomId &&
+        modalInteraction.user.id === interaction.user.id
+    });
+  } catch {
+    return;
+  }
+
+  const value = submitted.fields.getTextInputValue('customize_profile_text').trim();
+  const label = action === 'bio' ? 'bio' : 'nickname';
+  if (!value) {
+    return submitted.reply(componentMessage(
+      errorText(`<@${submitted.user.id}>: Enter a ${label}, or use Reset to clear it.`),
+      0xED4245,
+      true
+    ));
+  }
+
+  try {
+    await updateServerProfile(client, submitted.guild.id, { [action]: value });
+    await refreshCustomizeMenu(
+      interaction.message,
+      submitted.guild,
+      submitted.user,
+      client,
+      menuProfile,
+      action
+    );
+    return submitted.reply(componentMessage(
+      successText(`<@${submitted.user.id}>: Updated my server ${label}.`),
+      0x57F287,
+      true
+    ));
+  } catch (error) {
+    console.error(`SERVER PROFILE ${action.toUpperCase()} ERROR:`, error);
+    return submitted.reply(componentMessage(
+      errorText(`<@${submitted.user.id}>: ${error.message || 'Discord could not update the server profile.'}`),
+      0xED4245,
+      true
+    ));
+  }
+}
+
+async function promptForImage(interaction, action, client, menuProfile = {}) {
   const modal = imageModal(action, interaction.id);
   const modalCustomId = `fare_customize_image:${interaction.id}`;
   await interaction.showModal(modal);
@@ -487,7 +537,7 @@ async function promptForImage(interaction, action, client, prefix = ',', menuPro
   let submitted;
   try {
     submitted = await interaction.awaitModalSubmit({
-      time: 5 * 60 * 1000,
+      time: MENU_TIMEOUT_MS,
       filter: modalInteraction =>
         modalInteraction.customId === modalCustomId &&
         modalInteraction.user.id === interaction.user.id
@@ -506,7 +556,7 @@ async function promptForImage(interaction, action, client, prefix = ',', menuPro
 
   if (!imageUrl) {
     return submitted.reply(componentMessage(
-      `<@${submitted.user.id}>: Give an image link or upload a file, like \`${prefix}customize ${action} https://...\`.`,
+      `<@${submitted.user.id}>: Upload an image or paste its link in the form.`,
       0xED4245,
       true
     ));
@@ -593,7 +643,7 @@ async function showMenu(message, client) {
 
     if (action === 'avatar' || action === 'banner') {
       try {
-        return await promptForImage(interaction, action, client, getPrefix(message), profile);
+        return await promptForImage(interaction, action, client, profile);
       } catch (error) {
         console.error('CUSTOMIZE IMAGE MODAL ERROR:', error);
         if (!interaction.replied && !interaction.deferred) {
@@ -608,13 +658,19 @@ async function showMenu(message, client) {
     }
 
     if (action === 'bio' || action === 'nick') {
-      const prefix = getPrefix(message);
-      const example = action === 'bio' ? '<text>' : '<name>';
-      return interaction.reply(componentMessage(
-        `<@${interaction.user.id}>: Use \`${prefix}customize ${action} ${example}\`.`,
-        0xD3D3D3,
-        true
-      ));
+      try {
+        return await promptForText(interaction, action, client, profile);
+      } catch (error) {
+        console.error('CUSTOMIZE TEXT MODAL ERROR:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          return interaction.reply(componentMessage(
+            errorText('I could not open the text form. Please try again.'),
+            0xED4245,
+            true
+          ));
+        }
+        return;
+      }
     }
 
     try {
@@ -674,133 +730,13 @@ module.exports = {
     }
 
     const action = (args[0] || '').toLowerCase();
-    const prefix = getPrefix(message);
-
     if (!action || action === 'help') {
       return showMenu(message, client);
     }
 
-    let body;
-    let successMessage;
-
-    if (action === 'avatar' || action === 'banner') {
-      const attachment = message.attachments.first();
-      const imageUrl = attachment?.url || args[1];
-      if (!imageUrl) {
-        return message.reply(componentMessage(
-          errorText(`<@${message.author.id}>: Give an image link or attach one, like \`${prefix}customize ${action} https://...\`.`),
-          0xED4245
-        ));
-      }
-
-      try {
-        body = { [action]: await imageUrlToDataUri(imageUrl, attachment?.size ?? null) };
-      } catch (error) {
-        return message.reply(componentMessage(
-          errorText(`<@${message.author.id}>: ${error.message || 'I could not use that image.'}`),
-          0xED4245
-        ));
-      }
-      successMessage = `Updated my server ${action}.`;
-    } else if (action === 'bio') {
-      const bio = args.slice(1).join(' ').trim();
-      if (bio.toLowerCase() === 'clear') {
-        body = { bio: null };
-        successMessage = 'Cleared my bio in this server.';
-      } else {
-        if (!bio) {
-          return message.reply(componentMessage(
-            errorText(`<@${message.author.id}>: Give the bio text, like \`${prefix}customize bio <text>\`, or use \`${prefix}customize reset bio\` to clear it.`),
-            0xED4245
-          ));
-        }
-        if (bio.length > 190) {
-          return message.reply(componentMessage(
-            errorText(`<@${message.author.id}>: The server bio can be up to 190 characters.`),
-            0xED4245
-          ));
-        }
-        body = { bio };
-        successMessage = 'Updated my bio in this server.';
-      }
-    } else if (action === 'nick') {
-      const nick = args.slice(1).join(' ').trim();
-      if (nick.toLowerCase() === 'clear') {
-        body = { nick: null };
-        successMessage = 'Cleared my nickname in this server.';
-      } else {
-        if (!nick) {
-          return message.reply(componentMessage(
-            errorText(`<@${message.author.id}>: Give a nickname, like \`${prefix}customize nick <name>\`, or use \`${prefix}customize reset nick\` to clear it.`),
-            0xED4245
-          ));
-        }
-        if (nick.length > 32) {
-          return message.reply(componentMessage(
-            errorText(`<@${message.author.id}>: The server nickname can be up to 32 characters.`),
-            0xED4245
-          ));
-        }
-        body = { nick };
-        successMessage = 'Updated my nickname in this server.';
-      }
-    } else if (action === 'sync') {
-      try {
-        const { matched, notes } = await syncToServer(message.guild, client);
-        const description =
-          `Now matching the server: my **${matched.join(', ')}**` +
-          (notes.length ? `\n-# ${notes.join('\n-# ')}` : '');
-        return message.reply(componentMessage(
-          successText(`<@${message.author.id}>: ${description}`),
-          0x57F287
-        ));
-      } catch (error) {
-        console.error('SERVER PROFILE SYNC ERROR:', error);
-        return message.reply(componentMessage(
-          errorText(`<@${message.author.id}>: Discord could not sync the server profile. Check the server image and try again.`),
-          0xED4245
-        ));
-      }
-    } else if (action === 'reset') {
-      const target = (args[1] || '').toLowerCase();
-      const resetBodies = {
-        avatar: { avatar: null },
-        banner: { banner: null },
-        bio: { bio: null },
-        nick: { nick: null },
-        all: { avatar: null, banner: null, bio: null, nick: null }
-      };
-      if (!resetBodies[target]) {
-        return message.reply(componentMessage(
-          errorText(`<@${message.author.id}>: Use \`${prefix}customize reset <all|bio|avatar|banner|nick>\`. Example: \`${prefix}customize reset bio\`.`),
-          0xED4245
-        ));
-      }
-      body = resetBodies[target];
-      successMessage = target === 'all'
-        ? 'Reset my look in this server.'
-        : `Reset my server ${target}.`;
-    } else {
-      return message.reply({
-        components: [helpContainer(prefix)],
-        flags: V2,
-        allowedMentions: NO_PINGS
-      });
-    }
-
-    try {
-      await updateServerProfile(client, message.guild.id, body);
-    } catch (error) {
-      console.error('SERVER PROFILE UPDATE ERROR:', error);
-      return message.reply(componentMessage(
-        errorText(`<@${message.author.id}>: Discord could not update the server profile. Check the image or text and try again.`),
-        0xED4245
-      ));
-    }
-
     return message.reply(componentMessage(
-      successText(`<@${message.author.id}>: ${successMessage}`),
-      0x57F287
+      errorText(`<@${message.author.id}>: Use \`${getPrefix(message)}customize\` and choose an action from the menu.`),
+      0xD3D3D3
     ));
   }
 };
