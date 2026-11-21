@@ -5,6 +5,8 @@ const {
   ContainerBuilder,
   FileUploadBuilder,
   LabelBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   MessageFlags,
   ModalBuilder,
   PermissionsBitField,
@@ -212,7 +214,7 @@ function getPrefix(message) {
   return suffix ? commandToken.slice(0, -suffix[0].length) : ',';
 }
 
-function profileMenuContainer(guild, profile, user, botAvatarUrl) {
+function profileMenuContainer(guild, profile, user, botAvatarUrl, botBannerUrl) {
   const status = value => value ? 'Custom' : 'Default';
   const profileText =
     `**Nickname:** ${profile.nick || 'Default'}\n` +
@@ -221,6 +223,11 @@ function profileMenuContainer(guild, profile, user, botAvatarUrl) {
     `**Bio:** ${status(profile.bio)}`;
 
   const container = new ContainerBuilder().setAccentColor(0xD3D3D3);
+  if (botBannerUrl) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(botBannerUrl))
+    );
+  }
   if (botAvatarUrl) {
     const section = new SectionBuilder()
       .addTextDisplayComponents(
@@ -275,7 +282,7 @@ async function updateServerProfile(client, guildId, body) {
   return client.rest.patch(`/guilds/${guildId}/members/@me`, { body });
 }
 
-async function getServerBotAvatarUrl(guild, client, forceRefresh = false) {
+async function getServerBotMember(guild, forceRefresh = false) {
   let botMember = guild.members.me;
   if (!botMember || forceRefresh) {
     try {
@@ -284,9 +291,16 @@ async function getServerBotAvatarUrl(guild, client, forceRefresh = false) {
       console.error('SERVER BOT MEMBER FETCH ERROR:', error?.message || error);
     }
   }
+  return botMember || null;
+}
 
+function getServerBotAvatarUrl(botMember, client) {
   return botMember?.displayAvatarURL({ extension: 'png', size: 256 }) ||
     client.user.displayAvatarURL({ extension: 'png', size: 256 });
+}
+
+function getServerBotBannerUrl(botMember) {
+  return botMember?.bannerURL({ extension: 'png', size: 1024 }) || null;
 }
 
 async function refreshCustomizeMenu(menuMessage, guild, user, client, previousProfile, changedAction) {
@@ -297,10 +311,12 @@ async function refreshCustomizeMenu(menuMessage, guild, user, client, previousPr
     console.error('SERVER PROFILE REFRESH ERROR:', error?.message || error);
   }
 
-  const botAvatarUrl = await getServerBotAvatarUrl(guild, client, true);
+  const botMember = await getServerBotMember(guild, true);
+  const botAvatarUrl = getServerBotAvatarUrl(botMember, client);
+  const botBannerUrl = getServerBotBannerUrl(botMember);
   try {
     await menuMessage.edit({
-      components: [profileMenuContainer(guild, profile, user, botAvatarUrl)],
+      components: [profileMenuContainer(guild, profile, user, botAvatarUrl, botBannerUrl)],
       flags: V2,
       allowedMentions: NO_PINGS
     });
@@ -445,10 +461,12 @@ async function showMenu(message, client) {
     console.error('SERVER PROFILE READ ERROR:', error?.message || error);
   }
 
-  const botAvatarUrl = await getServerBotAvatarUrl(message.guild, client);
+  const botMember = await getServerBotMember(message.guild);
+  const botAvatarUrl = getServerBotAvatarUrl(botMember, client);
+  const botBannerUrl = getServerBotBannerUrl(botMember);
 
   const sent = await message.reply({
-    components: [profileMenuContainer(message.guild, profile, message.author, botAvatarUrl)],
+    components: [profileMenuContainer(message.guild, profile, message.author, botAvatarUrl, botBannerUrl)],
     flags: V2,
     allowedMentions: NO_PINGS
   });
