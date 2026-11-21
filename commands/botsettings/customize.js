@@ -275,6 +275,40 @@ async function updateServerProfile(client, guildId, body) {
   return client.rest.patch(`/guilds/${guildId}/members/@me`, { body });
 }
 
+async function getServerBotAvatarUrl(guild, client, forceRefresh = false) {
+  let botMember = guild.members.me;
+  if (!botMember || forceRefresh) {
+    try {
+      botMember = await guild.members.fetchMe(forceRefresh ? { force: true } : undefined);
+    } catch (error) {
+      console.error('SERVER BOT MEMBER FETCH ERROR:', error?.message || error);
+    }
+  }
+
+  return botMember?.displayAvatarURL({ extension: 'png', size: 256 }) ||
+    client.user.displayAvatarURL({ extension: 'png', size: 256 });
+}
+
+async function refreshCustomizeMenu(menuMessage, guild, user, client, previousProfile, changedAction) {
+  let profile = { ...previousProfile, [changedAction]: 'updated' };
+  try {
+    profile = await readServerProfile(client, guild.id);
+  } catch (error) {
+    console.error('SERVER PROFILE REFRESH ERROR:', error?.message || error);
+  }
+
+  const botAvatarUrl = await getServerBotAvatarUrl(guild, client, true);
+  try {
+    await menuMessage.edit({
+      components: [profileMenuContainer(guild, profile, user, botAvatarUrl)],
+      flags: V2,
+      allowedMentions: NO_PINGS
+    });
+  } catch (error) {
+    console.error('CUSTOMIZE MENU REFRESH ERROR:', error?.message || error);
+  }
+}
+
 async function syncToServer(guild, client) {
   const body = { nick: guild.name.slice(0, 32) };
   const matched = ['name'];
@@ -344,7 +378,7 @@ function imageModal(action, interactionId) {
   return modal.addLabelComponents(uploadLabel, linkLabel);
 }
 
-async function promptForImage(interaction, action, client, prefix = ',') {
+async function promptForImage(interaction, action, client, prefix = ',', menuProfile = {}) {
   const modal = imageModal(action, interaction.id);
   const modalCustomId = `fare_customize_image:${interaction.id}`;
   await interaction.showModal(modal);
@@ -380,6 +414,14 @@ async function promptForImage(interaction, action, client, prefix = ',') {
   try {
     const imageData = await imageUrlToDataUri(imageUrl, uploadedFile?.size ?? null);
     await updateServerProfile(client, submitted.guild.id, { [action]: imageData });
+    await refreshCustomizeMenu(
+      interaction.message,
+      submitted.guild,
+      submitted.user,
+      client,
+      menuProfile,
+      action
+    );
     return submitted.reply(componentMessage(
       successText(`<@${submitted.user.id}>: Updated my server ${action}.`),
       0x57F287,
@@ -403,16 +445,7 @@ async function showMenu(message, client) {
     console.error('SERVER PROFILE READ ERROR:', error?.message || error);
   }
 
-  let botMember = message.guild.members.me;
-  if (!botMember) {
-    try {
-      botMember = await message.guild.members.fetchMe();
-    } catch (error) {
-      console.error('SERVER BOT MEMBER FETCH ERROR:', error?.message || error);
-    }
-  }
-  const botAvatarUrl = botMember?.displayAvatarURL({ extension: 'png', size: 256 }) ||
-    client.user.displayAvatarURL({ extension: 'png', size: 256 });
+  const botAvatarUrl = await getServerBotAvatarUrl(message.guild, client);
 
   const sent = await message.reply({
     components: [profileMenuContainer(message.guild, profile, message.author, botAvatarUrl)],
@@ -457,7 +490,7 @@ async function showMenu(message, client) {
 
     if (action === 'avatar' || action === 'banner') {
       try {
-        return await promptForImage(interaction, action, client, getPrefix(message));
+        return await promptForImage(interaction, action, client, getPrefix(message), profile);
       } catch (error) {
         console.error('CUSTOMIZE IMAGE MODAL ERROR:', error);
         if (!interaction.replied && !interaction.deferred) {
