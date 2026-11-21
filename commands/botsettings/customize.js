@@ -733,9 +733,6 @@ module.exports = {
       return showMenu(message, client);
     }
 
-    return message.reply(componentMessage(
-      errorText(`<@${message.author.id}>: Use \`${getPrefix(message)}customize\` and choose an action from the menu.`),
-      0xD3D3D3
-    ));
+    return;
   }
 };
