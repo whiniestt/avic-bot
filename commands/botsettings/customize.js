@@ -2,8 +2,19 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
-  PermissionsBitField
+  ContainerBuilder,
+  FileUploadBuilder,
+  LabelBuilder,
+  MessageFlags,
+  ModalBuilder,
+  PermissionsBitField,
+  SectionBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  TextDisplayBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ThumbnailBuilder
 } = require('discord.js');
 const dns = require('node:dns/promises');
 const net = require('node:net');
@@ -17,39 +28,50 @@ const ALLOWED_IMAGE_TYPES = new Set([
 ]);
 const MENU_ACTION_COOLDOWN_MS = 10_000;
 const MENU_TIMEOUT_MS = 10 * 60 * 1000;
+const V2 = MessageFlags.IsComponentsV2;
+const NO_PINGS = { parse: [], repliedUser: false };
+const text = content => new TextDisplayBuilder().setContent(content);
+const divider = () => new SeparatorBuilder()
+  .setDivider(true)
+  .setSpacing(SeparatorSpacingSize.Small);
 
-function errorEmbed(text) {
-  return new EmbedBuilder()
-    .setColor('#ED4245')
-    .setDescription(`<:WarningIcon:1514708751385497721> ${text}`);
+function componentMessage(content, color = 0xD3D3D3, ephemeral = false) {
+  return {
+    components: [
+      new ContainerBuilder()
+        .setAccentColor(color)
+        .addTextDisplayComponents(text(content))
+    ],
+    flags: V2 | (ephemeral ? MessageFlags.Ephemeral : 0),
+    allowedMentions: NO_PINGS
+  };
 }
 
-function userErrorEmbed(user, text) {
-  return errorEmbed(`<@${user.id}>: ${text}`);
+function errorText(content) {
+  return `<:WarningIcon:1514708751385497721> ${content}`;
 }
 
-function successEmbed(user, text) {
-  return new EmbedBuilder()
-    .setColor('#57F287')
-    .setDescription(`<:Tick:1514714190500335677> <@${user.id}>: ${text}`);
+function successText(content) {
+  return `<:Tick:1514714190500335677> ${content}`;
 }
 
-function helpEmbed(prefix = ',') {
+function helpContainer(prefix = ',') {
   const command = `${prefix}customize`;
-  return new EmbedBuilder()
-    .setColor('#D3D3D3')
-    .setTitle('Fare server profile')
-    .setDescription(
-      'These settings affect Fare only in this server. Fare’s global Discord profile will not change.\n\n' +
+  return new ContainerBuilder()
+    .setAccentColor(0xD3D3D3)
+    .addTextDisplayComponents(text('## Fare Customize'))
+    .addSeparatorComponents(divider())
+    .addTextDisplayComponents(text(
+      'These settings affect Fare only in this server. Its global Discord profile will not change.\n\n' +
       `\`${command}\` — show the profile and action menu\n` +
       `\`${command} avatar [image link]\` — set the server avatar (or attach an image)\n` +
       `\`${command} banner [image link]\` — set the server banner (or attach an image)\n` +
       `\`${command} bio <text>\` — set the server bio\n` +
       `\`${command} sync\` — match the server name and icon; use its banner when available\n` +
-      `\`${command} nick <name>\` — set Fare’s nickname in this server\n` +
+      `\`${command} nick <name>\` — set the bot’s nickname in this server\n` +
       `\`${command} reset <all|bio|avatar|banner|nick>\` — reset server-profile settings\n\n` +
       '-# Avatar/banner images must be PNG, JPG, WEBP, or GIF and 8 MB or smaller.'
-    );
+    ));
 }
 
 function publicIPv4(address) {
@@ -142,7 +164,7 @@ async function imageUrlToDataUri(value, knownSize = null) {
   const imageUrl = await validateImageUrl(value);
   const response = await fetch(imageUrl, {
     redirect: 'error',
-    signal: AbortSignal.timeout(15000)
+    signal: AbortSignal.timeout(15_000)
   });
 
   if (!response.ok) {
@@ -159,7 +181,7 @@ async function imageUrlToDataUri(value, knownSize = null) {
     .trim()
     .toLowerCase();
   if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
-    throw new Error('Use a PNG, JPG, WEBP, or GIF image link.');
+    throw new Error('Use a PNG, JPG, WEBP, or GIF image.');
   }
 
   const reader = response.body?.getReader();
@@ -190,21 +212,37 @@ function getPrefix(message) {
   return suffix ? commandToken.slice(0, -suffix[0].length) : ',';
 }
 
-function profileMenuEmbed(guild, profile) {
+function profileMenuContainer(guild, profile, user) {
   const status = value => value ? 'Custom' : 'Default';
-  const embed = new EmbedBuilder()
-    .setColor('#D3D3D3')
-    .setTitle(`My look in ${guild.name}`)
-    .setDescription(
-      `**Nickname:** ${profile.nick || 'Default'}\n` +
-      `**Avatar:** ${status(profile.avatar)}\n` +
-      `**Banner:** ${status(profile.banner)}\n` +
-      `**Bio:** ${status(profile.bio)}\n\n` +
-      '-# Changes apply only to Fare in this server.'
-    );
+  const profileText =
+    `**Nickname:** ${profile.nick || 'Default'}\n` +
+    `**Avatar:** ${status(profile.avatar)}\n` +
+    `**Banner:** ${status(profile.banner)}\n` +
+    `**Bio:** ${status(profile.bio)}`;
+
   const iconUrl = guild.iconURL({ extension: 'png', size: 256 });
-  if (iconUrl) embed.setThumbnail(iconUrl);
-  return embed;
+  const container = new ContainerBuilder().setAccentColor(0xD3D3D3);
+  if (iconUrl) {
+    const section = new SectionBuilder()
+      .addTextDisplayComponents(
+        text(`## My look in ${guild.name}`),
+        text(profileText)
+      )
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL(iconUrl));
+    container.addSectionComponents(section);
+  } else {
+    container.addTextDisplayComponents(
+      text(`## My look in ${guild.name}`),
+      text(profileText)
+    );
+  }
+
+  return container
+    .addSeparatorComponents(divider())
+    .addTextDisplayComponents(text('-# Changes apply only to Fare in this server.'))
+    .addSeparatorComponents(divider())
+    .addActionRowComponents(...menuRows(user.id))
+    .addTextDisplayComponents(text(`-# Customize used by ${user.username}`));
 }
 
 function menuRows(userId) {
@@ -241,7 +279,7 @@ async function updateServerProfile(client, guildId, body) {
 async function syncToServer(guild, client) {
   const body = { nick: guild.name.slice(0, 32) };
   const matched = ['name'];
-  let notes = [];
+  const notes = [];
 
   const iconUrl = guild.iconURL({ extension: 'png', size: 1024 });
   if (iconUrl) {
@@ -278,6 +316,86 @@ function hasAdminPermission(member, permissionOverride = null) {
   }
 }
 
+function imageModal(action, interactionId) {
+  const modal = new ModalBuilder()
+    .setCustomId(`fare_customize_image:${interactionId}`)
+    .setTitle(action === 'avatar' ? 'Server avatar' : 'Server banner');
+
+  const fileUpload = new FileUploadBuilder()
+    .setCustomId('customize_image_file')
+    .setRequired(false)
+    .setMinValues(0)
+    .setMaxValues(1)
+    .setFileTypes('image');
+  const uploadLabel = new LabelBuilder()
+    .setLabel(action === 'avatar' ? 'Upload an avatar' : 'Upload a banner')
+    .setDescription('Choose an image file from your device.')
+    .setFileUploadComponent(fileUpload);
+
+  const imageLink = new TextInputBuilder()
+    .setCustomId('customize_image_url')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder('https://...');
+  const linkLabel = new LabelBuilder()
+    .setLabel('Or paste a link')
+    .setDescription('Leave this blank if you uploaded a file.')
+    .setTextInputComponent(imageLink);
+
+  return modal.addLabelComponents(uploadLabel, linkLabel);
+}
+
+async function promptForImage(interaction, action, client, prefix = ',') {
+  const modal = imageModal(action, interaction.id);
+  const modalCustomId = `fare_customize_image:${interaction.id}`;
+  await interaction.showModal(modal);
+
+  let submitted;
+  try {
+    submitted = await interaction.awaitModalSubmit({
+      time: 5 * 60 * 1000,
+      filter: modalInteraction =>
+        modalInteraction.customId === modalCustomId &&
+        modalInteraction.user.id === interaction.user.id
+    });
+  } catch {
+    return;
+  }
+
+  const uploadedFile = submitted.fields
+    .getUploadedFiles('customize_image_file')
+    ?.first();
+  const link = submitted.fields
+    .getTextInputValue('customize_image_url')
+    .trim();
+  const imageUrl = uploadedFile?.url || link;
+
+  if (!imageUrl) {
+    return submitted.reply(componentMessage(
+      `<@${submitted.user.id}>: Give an image link or upload a file, like \`${prefix}customize ${action} https://...\`.`,
+      0xED4245,
+      true
+    ));
+  }
+
+  try {
+    const imageData = await imageUrlToDataUri(imageUrl, uploadedFile?.size ?? null);
+    await updateServerProfile(client, submitted.guild.id, { [action]: imageData });
+    return submitted.reply(componentMessage(
+      successText(`<@${submitted.user.id}>: Updated my server ${action}.`),
+      0x57F287,
+      true
+    ));
+  } catch (error) {
+    console.error(`SERVER PROFILE ${action.toUpperCase()} ERROR:`, error);
+    return submitted.reply(componentMessage(
+      errorText(`<@${submitted.user.id}>: ${error.message || 'Discord could not update the server profile.'}`),
+      0xED4245,
+      true
+    ));
+  }
+}
+
 async function showMenu(message, client) {
   let profile = {};
   try {
@@ -287,61 +405,71 @@ async function showMenu(message, client) {
   }
 
   const sent = await message.reply({
-    embeds: [profileMenuEmbed(message.guild, profile)],
-    components: menuRows(message.author.id)
+    components: [profileMenuContainer(message.guild, profile, message.author)],
+    flags: V2,
+    allowedMentions: NO_PINGS
   });
 
   let nextMutationAt = 0;
   const collector = sent.createMessageComponentCollector({
     time: MENU_TIMEOUT_MS,
-    filter: interaction => interaction.user.id === message.author.id
+    filter: interaction => interaction.customId.startsWith('fare_customize:')
   });
 
   collector.on('collect', async interaction => {
-    const action = interaction.customId.split(':').at(-1);
+    const [, userId, action] = interaction.customId.split(':');
+    if (interaction.user.id !== userId) {
+      return interaction.reply(componentMessage(
+        'This customize menu is not yours.',
+        0xED4245,
+        true
+      ));
+    }
+
     if (!hasAdminPermission(interaction.member, interaction.memberPermissions)) {
-      return interaction.reply({
-        embeds: [userErrorEmbed(interaction.user, 'Only server admins can change Fare’s server profile.')],
-        ephemeral: true
-      });
-    }
-
-    if (action === 'avatar' || action === 'banner') {
-      const prefix = getPrefix(message);
-      return interaction.reply({
-        embeds: [new EmbedBuilder()
-          .setColor('#D3D3D3')
-          .setDescription(
-            `<@${interaction.user.id}>: Attach an image to a message with ` +
-            `\`${prefix}customize ${action}\`, or use ` +
-            `\`${prefix}customize ${action} https://...\`.`
-          )],
-        ephemeral: true
-      });
-    }
-
-    if (action === 'bio' || action === 'nick') {
-      const example = action === 'bio' ? '<text>' : '<name>';
-      return interaction.reply({
-        embeds: [new EmbedBuilder()
-          .setColor('#D3D3D3')
-          .setDescription(
-            `<@${interaction.user.id}>: Use ` +
-            `\`${getPrefix(message)}customize ${action} ${example}\`.`
-          )],
-        ephemeral: true
-      });
+      return interaction.reply(componentMessage(
+        errorText('Only server admins can change Fare’s server profile.'),
+        0xED4245,
+        true
+      ));
     }
 
     const now = Date.now();
     if (now < nextMutationAt) {
       const timeLeft = Math.ceil((nextMutationAt - now) / 1000);
-      return interaction.reply({
-        embeds: [errorEmbed(`Wait ${timeLeft}s before the next menu action.`)],
-        ephemeral: true
-      });
+      return interaction.reply(componentMessage(
+        errorText(`Wait ${timeLeft}s before the next menu action.`),
+        0xED4245,
+        true
+      ));
     }
     nextMutationAt = now + MENU_ACTION_COOLDOWN_MS;
+
+    if (action === 'avatar' || action === 'banner') {
+      try {
+        return await promptForImage(interaction, action, client, getPrefix(message));
+      } catch (error) {
+        console.error('CUSTOMIZE IMAGE MODAL ERROR:', error);
+        if (!interaction.replied && !interaction.deferred) {
+          return interaction.reply(componentMessage(
+            errorText('I could not open the image form. Please try again.'),
+            0xED4245,
+            true
+          ));
+        }
+        return;
+      }
+    }
+
+    if (action === 'bio' || action === 'nick') {
+      const prefix = getPrefix(message);
+      const example = action === 'bio' ? '<text>' : '<name>';
+      return interaction.reply(componentMessage(
+        `<@${interaction.user.id}>: Use \`${prefix}customize ${action} ${example}\`.`,
+        0xD3D3D3,
+        true
+      ));
+    }
 
     try {
       if (action === 'sync') {
@@ -349,10 +477,11 @@ async function showMenu(message, client) {
         const description =
           `Now matching the server: my **${matched.join(', ')}**` +
           (notes.length ? `\n-# ${notes.join('\n-# ')}` : '');
-        return interaction.reply({
-          embeds: [successEmbed(interaction.user, description)],
-          ephemeral: true
-        });
+        return interaction.reply(componentMessage(
+          successText(`<@${interaction.user.id}>: ${description}`),
+          0x57F287,
+          true
+        ));
       }
 
       if (action === 'reset') {
@@ -362,22 +491,25 @@ async function showMenu(message, client) {
           bio: null,
           nick: null
         });
-        return interaction.reply({
-          embeds: [successEmbed(interaction.user, 'Reset my look in this server.')],
-          ephemeral: true
-        });
+        return interaction.reply(componentMessage(
+          successText(`<@${interaction.user.id}>: Reset my look in this server.`),
+          0x57F287,
+          true
+        ));
       }
 
-      return interaction.reply({
-        embeds: [errorEmbed('That menu action is no longer available. Run the command again.')],
-        ephemeral: true
-      });
+      return interaction.reply(componentMessage(
+        errorText('That menu action is no longer available. Run the command again.'),
+        0xED4245,
+        true
+      ));
     } catch (error) {
       console.error('SERVER PROFILE MENU ACTION ERROR:', error);
-      return interaction.reply({
-        embeds: [userErrorEmbed(interaction.user, 'Discord could not update the server profile. Check the image or text and try again.')],
-        ephemeral: true
-      });
+      return interaction.reply(componentMessage(
+        errorText('Discord could not update the server profile. Check the image or text and try again.'),
+        0xED4245,
+        true
+      ));
     }
   });
 
@@ -392,15 +524,17 @@ module.exports = {
 
   async execute(message, args, client) {
     if (!message.guild || !message.member) {
-      return message.reply({
-        embeds: [errorEmbed('Use this command inside a server.')]
-      });
+      return message.reply(componentMessage(
+        errorText('Use this command inside a server.'),
+        0xED4245
+      ));
     }
 
     if (!hasAdminPermission(message.member)) {
-      return message.reply({
-        embeds: [userErrorEmbed(message.author, 'Only server admins can change Fare’s server profile.')]
-      });
+      return message.reply(componentMessage(
+        errorText(`<@${message.author.id}>: Only server admins can change Fare’s server profile.`),
+        0xED4245
+      ));
     }
 
     const action = (args[0] || '').toLowerCase();
@@ -411,74 +545,68 @@ module.exports = {
     }
 
     let body;
-    let successText;
+    let successMessage;
 
     if (action === 'avatar' || action === 'banner') {
       const attachment = message.attachments.first();
       const imageUrl = attachment?.url || args[1];
-
       if (!imageUrl) {
-        return message.reply({
-          embeds: [userErrorEmbed(
-            message.author,
-            `Give an image link or attach one, like \`${prefix}customize ${action} https://...\``
-          )]
-        });
+        return message.reply(componentMessage(
+          errorText(`<@${message.author.id}>: Give an image link or attach one, like \`${prefix}customize ${action} https://...\`.`),
+          0xED4245
+        ));
       }
 
       try {
-        body = {
-          [action]: await imageUrlToDataUri(imageUrl, attachment?.size ?? null)
-        };
+        body = { [action]: await imageUrlToDataUri(imageUrl, attachment?.size ?? null) };
       } catch (error) {
-        return message.reply({
-          embeds: [userErrorEmbed(message.author, error.message || 'I could not use that image.')]
-        });
+        return message.reply(componentMessage(
+          errorText(`<@${message.author.id}>: ${error.message || 'I could not use that image.'}`),
+          0xED4245
+        ));
       }
-      successText = `Updated my server ${action}.`;
+      successMessage = `Updated my server ${action}.`;
     } else if (action === 'bio') {
       const bio = args.slice(1).join(' ').trim();
       if (bio.toLowerCase() === 'clear') {
         body = { bio: null };
-        successText = 'Cleared my bio in this server.';
+        successMessage = 'Cleared my bio in this server.';
       } else {
         if (!bio) {
-          return message.reply({
-            embeds: [userErrorEmbed(
-              message.author,
-              `Give the bio text, like \`${prefix}customize bio <text>\`, or use \`${prefix}customize reset bio\` to clear it.`
-            )]
-          });
+          return message.reply(componentMessage(
+            errorText(`<@${message.author.id}>: Give the bio text, like \`${prefix}customize bio <text>\`, or use \`${prefix}customize reset bio\` to clear it.`),
+            0xED4245
+          ));
         }
         if (bio.length > 190) {
-          return message.reply({
-            embeds: [userErrorEmbed(message.author, 'The server bio can be up to 190 characters.')]
-          });
+          return message.reply(componentMessage(
+            errorText(`<@${message.author.id}>: The server bio can be up to 190 characters.`),
+            0xED4245
+          ));
         }
         body = { bio };
-        successText = 'Updated my bio in this server.';
+        successMessage = 'Updated my bio in this server.';
       }
     } else if (action === 'nick') {
       const nick = args.slice(1).join(' ').trim();
       if (nick.toLowerCase() === 'clear') {
         body = { nick: null };
-        successText = 'Cleared my nickname in this server.';
+        successMessage = 'Cleared my nickname in this server.';
       } else {
         if (!nick) {
-          return message.reply({
-            embeds: [userErrorEmbed(
-              message.author,
-              `Give a nickname, like \`${prefix}customize nick <name>\`, or use \`${prefix}customize reset nick\` to clear it.`
-            )]
-          });
+          return message.reply(componentMessage(
+            errorText(`<@${message.author.id}>: Give a nickname, like \`${prefix}customize nick <name>\`, or use \`${prefix}customize reset nick\` to clear it.`),
+            0xED4245
+          ));
         }
         if (nick.length > 32) {
-          return message.reply({
-            embeds: [userErrorEmbed(message.author, 'The server nickname can be up to 32 characters.')]
-          });
+          return message.reply(componentMessage(
+            errorText(`<@${message.author.id}>: The server nickname can be up to 32 characters.`),
+            0xED4245
+          ));
         }
         body = { nick };
-        successText = 'Updated my nickname in this server.';
+        successMessage = 'Updated my nickname in this server.';
       }
     } else if (action === 'sync') {
       try {
@@ -486,14 +614,16 @@ module.exports = {
         const description =
           `Now matching the server: my **${matched.join(', ')}**` +
           (notes.length ? `\n-# ${notes.join('\n-# ')}` : '');
-        return message.reply({
-          embeds: [successEmbed(message.author, description)]
-        });
+        return message.reply(componentMessage(
+          successText(`<@${message.author.id}>: ${description}`),
+          0x57F287
+        ));
       } catch (error) {
         console.error('SERVER PROFILE SYNC ERROR:', error);
-        return message.reply({
-          embeds: [userErrorEmbed(message.author, 'Discord could not sync the server profile. Check the server image and try again.')]
-        });
+        return message.reply(componentMessage(
+          errorText(`<@${message.author.id}>: Discord could not sync the server profile. Check the server image and try again.`),
+          0xED4245
+        ));
       }
     } else if (action === 'reset') {
       const target = (args[1] || '').toLowerCase();
@@ -504,38 +634,37 @@ module.exports = {
         nick: { nick: null },
         all: { avatar: null, banner: null, bio: null, nick: null }
       };
-
       if (!resetBodies[target]) {
-        return message.reply({
-          embeds: [userErrorEmbed(
-            message.author,
-            `Use \`${prefix}customize reset <all|bio|avatar|banner|nick>\`. Example: \`${prefix}customize reset bio\`.`
-          )]
-        });
+        return message.reply(componentMessage(
+          errorText(`<@${message.author.id}>: Use \`${prefix}customize reset <all|bio|avatar|banner|nick>\`. Example: \`${prefix}customize reset bio\`.`),
+          0xED4245
+        ));
       }
-
       body = resetBodies[target];
-      successText = target === 'all'
+      successMessage = target === 'all'
         ? 'Reset my look in this server.'
         : `Reset my server ${target}.`;
     } else {
-      return message.reply({ embeds: [helpEmbed(prefix)] });
+      return message.reply({
+        components: [helpContainer(prefix)],
+        flags: V2,
+        allowedMentions: NO_PINGS
+      });
     }
 
     try {
       await updateServerProfile(client, message.guild.id, body);
     } catch (error) {
       console.error('SERVER PROFILE UPDATE ERROR:', error);
-      return message.reply({
-        embeds: [userErrorEmbed(
-          message.author,
-          'Discord could not update the server profile. Check the image or text and try again.'
-        )]
-      });
+      return message.reply(componentMessage(
+        errorText(`<@${message.author.id}>: Discord could not update the server profile. Check the image or text and try again.`),
+        0xED4245
+      ));
     }
 
-    return message.reply({
-      embeds: [successEmbed(message.author, successText)]
-    });
+    return message.reply(componentMessage(
+      successText(`<@${message.author.id}>: ${successMessage}`),
+      0x57F287
+    ));
   }
 };
