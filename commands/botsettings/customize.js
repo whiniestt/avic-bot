@@ -729,8 +729,7 @@ module.exports = {
       ));
     }
 
-    const action = (args[0] || '').toLowerCase();
-    if (!action || action === 'help') {
+    if (!args.length) {
       return showMenu(message, client);
     }
 
