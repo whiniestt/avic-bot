@@ -284,13 +284,13 @@ const updateStatus = () => {
         status: "dnd",
         activities: [
             {
-                name: "Fare goes offline in 25 days • back after 86 days",
+                name: "Fare goes offline in 20 days… back soon!",
                 type: 4
             }
         ]
     });
 
-    console.log("🔄 Activity updated: Fare goes offline in 25 days • back after 86 days");
+    console.log("🔄 Activity updated: Fare goes offline in 20 days… back soon!");
 };
 
 updateStatus();
