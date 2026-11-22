@@ -26,25 +26,38 @@ const ENDPOINTS = new Set([
   'handholding','blowkiss'
 ]);
 
+const lastGifByEndpoint = new Map();
+
 async function waifu(action) {
   const endpoint = WAIFU_ALIASES[action] || action;
 
   if (!ENDPOINTS.has(endpoint)) return null;
 
-  const res = await fetch(
-    `https://api.waifu.pics/sfw/${endpoint}`,
-    {
-      headers: {
-        'User-Agent': 'FareBot/1.0'
+  const previousUrl = lastGifByEndpoint.get(endpoint);
+  let selectedUrl = null;
+
+  // The API is random, but retry if it returns the same image as last time.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(
+      `https://api.waifu.pics/sfw/${endpoint}`,
+      {
+        headers: {
+          'User-Agent': 'FareBot/1.0'
+        }
       }
-    }
-  );
+    );
 
-  if (!res.ok) return null;
+    if (!res.ok) continue;
 
-  const data = await res.json();
+    const data = await res.json();
+    if (!data.url) continue;
 
-  return data.url || null;
+    selectedUrl = data.url;
+    if (selectedUrl !== previousUrl) break;
+  }
+
+  if (selectedUrl) lastGifByEndpoint.set(endpoint, selectedUrl);
+  return selectedUrl;
 }
 
 function target(message, args) {
@@ -90,6 +103,31 @@ function embed(message, title, description, image) {
   return e;
 }
 
+function reactionEmbed(message, name, targetUser, image) {
+  const requester = message.member?.displayName || message.author?.globalName || message.author?.username || 'Someone';
+  const requesterAvatar = message.member?.displayAvatarURL({ extension: 'png', size: 128 }) ||
+    message.author?.displayAvatarURL({ extension: 'png', size: 128 });
+  const targetName = typeof targetUser === 'string'
+    ? targetUser
+    : targetUser?.globalName || targetUser?.username || null;
+  const action = displayName(name).toLowerCase();
+  const line = name === 'yes'
+    ? 'says yes! 🙋'
+    : name === 'no'
+      ? 'says no! 🙅'
+      : `used ${action}${targetName ? ` on ${targetName}` : ''}!`;
+
+  const e = new EmbedBuilder()
+    .setColor(0x3D4752)
+    .setAuthor({
+      name: `${requester} ${line}`.slice(0, 256),
+      ...(requesterAvatar ? { iconURL: requesterAvatar } : {})
+    });
+
+  if (image) e.setImage(image);
+  return e;
+}
+
 function funReply(message, name, payload) {
   const normalized = typeof payload === 'string' ? { content: payload } : payload;
 
@@ -132,22 +170,10 @@ async function runFun(name, message, args) {
 
   if (WAIFU.has(name)) {
     const url = await waifu(name).catch(() => null);
-    const who = t
-      ? (
-          typeof t === 'string'
-            ? `**${t}**`
-            : `<@${t.id}>`
-        )
-      : 'everyone';
 
     return funReply(message, name, {
       embeds: [
-        embed(
-          message,
-          `✨ ${displayName(name)}`,
-          `**${message.author.username}** used **${displayName(name)}** on ${who}.`,
-          url
-        )
+        reactionEmbed(message, name, t, url)
       ]
     });
   }
