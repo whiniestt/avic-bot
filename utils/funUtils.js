@@ -58,15 +58,52 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function embed(title, description, image) {
+const TITLE_OVERRIDES = {
+  eightball: 'Magic 8-Ball',
+  doublestruck: 'Double-Struck Text',
+  emojipasta: 'Emoji Pasta',
+  whowouldwin: 'Who Would Win?',
+  jokeoverhead: 'Joke Overhead',
+  showerthought: 'Shower Thought',
+  factsmeme: 'Facts Meme'
+};
+
+function displayName(name) {
+  return TITLE_OVERRIDES[name] || name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+function embed(message, title, description, image) {
+  const botIcon = message.client?.user?.displayAvatarURL({ extension: 'png', size: 128 });
+  const requester = message.author?.username || 'Fare user';
   const e = new EmbedBuilder()
-    .setColor('#D3D3D3')
+    .setColor(0x3D4752)
+    .setAuthor({ name: 'FARE • FUN', ...(botIcon ? { iconURL: botIcon } : {}) })
     .setTitle(title)
-    .setDescription(description);
+    .setDescription(String(description).slice(0, 4096))
+    .setFooter({ text: `Requested by ${requester}` })
+    .setTimestamp();
+
+  if (botIcon) e.setThumbnail(botIcon);
 
   if (image) e.setImage(image);
 
   return e;
+}
+
+function funReply(message, name, payload) {
+  const normalized = typeof payload === 'string' ? { content: payload } : payload;
+
+  if (typeof normalized?.content === 'string' && !normalized.embeds?.length) {
+    return message.reply({
+      embeds: [embed(message, `✨ ${displayName(name)}`, normalized.content)],
+      allowedMentions: { parse: [] }
+    });
+  }
+
+  return message.reply({
+    ...normalized,
+    allowedMentions: { parse: [] }
+  });
 }
 
 const eight = [
@@ -95,12 +132,6 @@ async function runFun(name, message, args) {
 
   if (WAIFU.has(name)) {
     const url = await waifu(name).catch(() => null);
-
-    const actionText = name.replace(
-      /([a-z])([A-Z])/g,
-      '$1 $2'
-    );
-
     const who = t
       ? (
           typeof t === 'string'
@@ -109,11 +140,12 @@ async function runFun(name, message, args) {
         )
       : 'everyone';
 
-    return message.reply({
+    return funReply(message, name, {
       embeds: [
         embed(
-          `✨ ${name}`,
-          `${message.author} **${name}** ${who}.`,
+          message,
+          `✨ ${displayName(name)}`,
+          `**${message.author.username}** used **${displayName(name)}** on ${who}.`,
           url
         )
       ]
@@ -122,17 +154,17 @@ async function runFun(name, message, args) {
 
   switch (name) {
     case 'eightball':
-      return message.reply(pick(eight));
+      return funReply(message, name, pick(eight));
 
     case 'reverse':
-      return message.reply(
+      return funReply(message, name,
         args.length
           ? args.join(' ').split('').reverse().join('')
           : 'Usage: `,reverse <text>`'
       );
 
     case 'mock':
-      return message.reply(
+      return funReply(message, name,
         args.length
           ? args.join(' ')
               .split('')
@@ -150,7 +182,7 @@ async function runFun(name, message, args) {
       );
 
     case 'doublestruck':
-      return message.reply(
+      return funReply(message, name,
         args.length
           ? args.join(' ')
               .split('')
@@ -168,7 +200,7 @@ async function runFun(name, message, args) {
       );
 
     case 'emojipasta':
-      return message.reply(
+      return funReply(message, name,
         args.length
           ? args.join(' ')
               .split('')
@@ -221,7 +253,7 @@ async function runFun(name, message, args) {
         '0': '-----'
       };
 
-      return message.reply(
+      return funReply(message, name,
         args.length
           ? args.join(' ')
               .toLowerCase()
@@ -237,7 +269,7 @@ async function runFun(name, message, args) {
     }
 
     case 'pickup':
-      return message.reply(
+      return funReply(message, name,
         pick([
           'Are you Wi-Fi? Because I’m feeling a connection.',
           'You must be a command, because you have my full attention.',
@@ -246,7 +278,7 @@ async function runFun(name, message, args) {
       );
 
     case 'showerthought':
-      return message.reply(
+      return funReply(message, name,
         pick([
           'If tomatoes are a fruit, ketchup is technically a smoothie.',
           'Your future self is watching you through memories.',
@@ -255,7 +287,7 @@ async function runFun(name, message, args) {
       );
 
     case 'joke':
-      return message.reply(
+      return funReply(message, name,
         pick([
           'Why did the developer go broke? Because he used up all his cache.',
           'Why do programmers prefer dark mode? Because light attracts bugs.',
@@ -264,7 +296,7 @@ async function runFun(name, message, args) {
       );
 
     case 'fact':
-      return message.reply(
+      return funReply(message, name,
         pick([
           'Honey never spoils when properly stored.',
           'Octopuses have three hearts.',
@@ -273,7 +305,7 @@ async function runFun(name, message, args) {
       );
 
     case 'truth':
-      return message.reply(
+      return funReply(message, name,
         pick([
           'What is your most embarrassing recent moment?',
           'Who was the last person you stalked online?',
@@ -282,7 +314,7 @@ async function runFun(name, message, args) {
       );
 
     case 'dare':
-      return message.reply(
+      return funReply(message, name,
         pick([
           'Send the fifth photo in your gallery.',
           'Change your status to “I love pineapple pizza” for 10 minutes.',
@@ -291,7 +323,7 @@ async function runFun(name, message, args) {
       );
 
     case 'caption':
-      return message.reply(
+      return funReply(message, name,
         pick([
           'main character energy.',
           'quietly becoming better.',
@@ -301,7 +333,7 @@ async function runFun(name, message, args) {
       );
 
     case 'quote':
-      return message.reply(
+      return funReply(message, name,
         pick([
           '“The secret of getting ahead is getting started.”',
           '“Success is the sum of small efforts repeated day in and day out.”',
@@ -310,7 +342,7 @@ async function runFun(name, message, args) {
       );
 
     case 'opinion':
-      return message.reply(
+      return funReply(message, name,
         args.length
           ? `My completely unbiased opinion: **${args.join(' ')}** is ${pick([
               'interesting.',
@@ -322,14 +354,14 @@ async function runFun(name, message, args) {
       );
 
     case 'couldread':
-      return message.reply(
+      return funReply(message, name,
         args.length
           ? `I could read **${args.join(' ')}** all day.`
           : 'Usage: `,couldread <text>`'
       );
 
     case 'alert':
-      return message.reply({
+      return funReply(message, name, {
         content: `🚨 ${
           args.length
             ? args.join(' ')
@@ -338,7 +370,7 @@ async function runFun(name, message, args) {
       });
 
     case 'supreme':
-      return message.reply(
+      return funReply(message, name,
         pick([
           'SUPREME.',
           'Absolutely supreme.',
@@ -347,7 +379,7 @@ async function runFun(name, message, args) {
       );
 
     case 'whowouldwin':
-      return message.reply(
+      return funReply(message, name,
         t
           ? `${message.author} vs ${
               typeof t === 'string'
@@ -362,22 +394,22 @@ async function runFun(name, message, args) {
       );
 
     case 'jokeoverhead':
-      return message.reply(
+      return funReply(message, name,
         '⚠️ Joke overhead. Please duck.'
       );
 
     case 'caution':
-      return message.reply(
+      return funReply(message, name,
         '⚠️ Proceed with caution.'
       );
 
     case 'gun':
-      return message.reply(
+      return funReply(message, name,
         '🔫 Pew pew. Keep it fictional and harmless.'
       );
 
     case 'drip':
-      return message.reply(
+      return funReply(message, name,
         `${t
           ? (
               typeof t === 'string'
@@ -388,32 +420,32 @@ async function runFun(name, message, args) {
       );
 
     case 'blur':
-      return message.reply(
+      return funReply(message, name,
         '🫥 Blur filter activated — imagine everything slightly out of focus.'
       );
 
     case 'invert':
-      return message.reply(
+      return funReply(message, name,
         '🔄 Invert filter activated.'
       );
 
     case 'greyscale':
-      return message.reply(
+      return funReply(message, name,
         '⬛ Greyscale filter activated.'
       );
 
     case 'advertise':
-      return message.reply(
+      return funReply(message, name,
         '📢 Fare — Minimal. Powerful. Built for modern Discord communities.'
       );
 
     case 'mnm':
-      return message.reply(
+      return funReply(message, name,
         '🍫 M&M mode: enabled.'
       );
 
     case 'clown':
-      return message.reply(
+      return funReply(message, name,
         `${t
           ? (
               typeof t === 'string'
@@ -424,7 +456,7 @@ async function runFun(name, message, args) {
       );
 
     case 'jailed':
-      return message.reply(
+      return funReply(message, name,
         `${t
           ? (
               typeof t === 'string'
@@ -435,7 +467,7 @@ async function runFun(name, message, args) {
       );
 
     case 'wanted':
-      return message.reply(
+      return funReply(message, name,
         `🚨 WANTED: ${
           t
             ? (
@@ -448,7 +480,7 @@ async function runFun(name, message, args) {
       );
 
     case 'pet':
-      return message.reply(
+      return funReply(message, name,
         `🐾 ${message.author} pets ${
           t
             ? (
@@ -461,22 +493,22 @@ async function runFun(name, message, args) {
       );
 
     case 'nokia':
-      return message.reply(
+      return funReply(message, name,
         '📱 Nokia durability test: **passed.**'
       );
 
     case 'uncover':
-      return message.reply(
+      return funReply(message, name,
         '🕵️ Something was uncovered. Unfortunately, it was another Discord message.'
       );
 
     case 'huerotate':
-      return message.reply(
+      return funReply(message, name,
         '🌈 Hue rotated successfully.'
       );
 
     case 'colorify':
-      return message.reply(
+      return funReply(message, name,
         '🌈 Colorify activated.'
       );
 
@@ -490,9 +522,10 @@ async function runFun(name, message, args) {
           ? await r.json().catch(() => null)
           : null;
 
-      return message.reply({
+      return funReply(message, name, {
         embeds: [
           embed(
+            message,
             '🐱 Cat',
             'Here is your cat.',
             d?.url || 'https://cataas.com/cat'
@@ -502,7 +535,7 @@ async function runFun(name, message, args) {
     }
 
     case 'hack':
-      return message.reply(
+      return funReply(message, name,
         `💻 Hacking ${
           t
             ? (
@@ -519,57 +552,57 @@ async function runFun(name, message, args) {
       );
 
     case 'token':
-      return message.reply(
+      return funReply(message, name,
         '🔐 Nice try. Fare will never expose Discord tokens or secrets.'
       );
 
     case 'biden':
-      return message.reply(
+      return funReply(message, name,
         '🇺🇸 Meme command executed.'
       );
 
     case 'pikachu':
-      return message.reply(
+      return funReply(message, name,
         '⚡ Pika pika!'
       );
 
     case 'oogway':
-      return message.reply(
+      return funReply(message, name,
         '🐢 There are no accidents.'
       );
 
     case 'drake':
-      return message.reply(
+      return funReply(message, name,
         '🙅 Drake says no.\n👉 Drake says yes.'
       );
 
     case 'pooh':
-      return message.reply(
+      return funReply(message, name,
         '🍯 Pooh approves.'
       );
 
     case 'sadcat':
-      return message.reply(
+      return funReply(message, name,
         '😿 *sad cat noises*'
       );
 
     case 'factsmeme':
-      return message.reply(
+      return funReply(message, name,
         '📚 FACTS: you are currently using Fare.'
       );
 
     case 'unforgivable':
-      return message.reply(
+      return funReply(message, name,
         '🚫 That was unforgivable.'
       );
 
     case 'cool':
-      return message.reply(
+      return funReply(message, name,
         '😎 Cool detected.'
       );
 
     default:
-      return message.reply(
+      return funReply(message, name,
         'Fun command executed!'
       );
   }
