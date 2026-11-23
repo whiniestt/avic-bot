@@ -16,7 +16,12 @@ const {
     Client,
     GatewayIntentBits,
     Collection,
-    EmbedBuilder
+    EmbedBuilder,
+    ContainerBuilder,
+    TextDisplayBuilder,
+    SectionBuilder,
+    ThumbnailBuilder,
+    MessageFlags
 } = require("discord.js");
 
 const http = require("http");
@@ -25,6 +30,23 @@ const fs = require("fs");
 const path = require("path");
 
 const db = require("./database");
+
+function createAfkNotice(message, content, color = 0xD3D3D3, user = message.author) {
+    const avatar = user.displayAvatarURL({ extension: "png", size: 128 });
+    const container = new ContainerBuilder()
+        .setAccentColor(color)
+        .addSectionComponents(
+            new SectionBuilder()
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(content))
+                .setThumbnailAccessory(new ThumbnailBuilder().setURL(avatar))
+        );
+
+    return {
+        components: [container],
+        flags: MessageFlags.IsComponentsV2,
+        allowedMentions: { parse: [], repliedUser: false }
+    };
+}
 
 setInterval(() => {
     const mem = process.memoryUsage();
@@ -314,23 +336,14 @@ setInterval(updateStatus, 5 * 60 * 1000);
                 `afk_${message.author.id}`
             );
 
-            message.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor("#57F287")
-                        .setThumbnail(
-                            message.author.displayAvatarURL({
-                                dynamic: true
-                            })
-                        )
-                        .setDescription(
-                            `<:Tick:1514714190500335677> Welcome back ${message.author} from Global AFK\n\n` +
-                            `<:arrow:1514699753462566953> You have been AFK since <t:${Math.floor(globalAfk.since / 1000)}:R>\n` +
-                            `<:info:1514699288674828310> Reason • ${globalAfk.reason}\n` +
-                            `<:dot:1514706694079254730> Mentions • **${globalAfk.mentions || 0}**`
-                        )
-                ]
-            });
+            message.reply(createAfkNotice(
+                message,
+                `<:Tick:1514714190500335677> **Welcome back ${message.author} from Global AFK**\n\n` +
+                `<:arrow:1514699753462566953> You have been AFK since <t:${Math.floor(globalAfk.since / 1000)}:R>\n` +
+                `<:info:1514699288674828310> Reason • ${globalAfk.reason}\n` +
+                `<:dot:1514706694079254730> Mentions • **${globalAfk.mentions || 0}**`,
+                0x57F287
+            ));
         }
 
         // =========================
@@ -347,23 +360,14 @@ setInterval(updateStatus, 5 * 60 * 1000);
                     `afk_${message.guild.id}_${message.author.id}`
                 );
 
-                message.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor("#A9C7FF")
-                            .setThumbnail(
-                                message.author.displayAvatarURL({
-                                    dynamic: true
-                                })
-                            )
-                            .setDescription(
-                                `<:Tick:1514714190500335677> Welcome back ${message.author} from Server AFK\n\n` +
-                                `<:arrow:1514699753462566953> You have been AFK since <t:${Math.floor(serverAfk.since / 1000)}:R>\n` +
-                                `<:info:1514699288674828310> Reason • ${serverAfk.reason}\n` +
-                                `<:dot:1514706694079254730> Mentions • **${serverAfk.mentions || 0}**`
-                            )
-                    ]
-                });
+                message.reply(createAfkNotice(
+                    message,
+                    `<:Tick:1514714190500335677> **Welcome back ${message.author} from Server AFK**\n\n` +
+                    `<:arrow:1514699753462566953> You have been AFK since <t:${Math.floor(serverAfk.since / 1000)}:R>\n` +
+                    `<:info:1514699288674828310> Reason • ${serverAfk.reason}\n` +
+                    `<:dot:1514706694079254730> Mentions • **${serverAfk.mentions || 0}**`,
+                    0xD3D3D3
+                ));
             }
         }
 
@@ -390,22 +394,14 @@ setInterval(updateStatus, 5 * 60 * 1000);
 
                 await db.set(key, data);
 
-                message.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor("#FFCC66")
-                            .setThumbnail(
-                                user.displayAvatarURL({
-                                    dynamic: true
-                                })
-                            )
-                            .setDescription(
-                                `<:WarningIcon:1514708751385497721> **${user.username} is currently AFK**\n\n` +
-                                `<:arrow:1514699753462566953> Reason • ${data.reason}\n` +
-                                `<:timerr:1514699712681218094> Since • <t:${Math.floor(data.since / 1000)}:R>`
-                            )
-                    ]
-                });
+                message.reply(createAfkNotice(
+                    message,
+                    `<:WarningIcon:1514708751385497721> **${user.username} is currently AFK**\n\n` +
+                    `<:arrow:1514699753462566953> Reason • ${data.reason}\n` +
+                    `<:timerr:1514699712681218094> Since • <t:${Math.floor(data.since / 1000)}:R>`,
+                    0xFFCC66,
+                    user
+                ));
             }
         }
 
@@ -487,15 +483,10 @@ setInterval(updateStatus, 5 * 60 * 1000);
             );
 
             message
-                .reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor("#D3D3D3")
-                            .setDescription(
-                                `<:Tick:1514714190500335677> Welcome back ${message.author}`
-                            )
-                    ]
-                })
+                .reply(createAfkNotice(
+                    message,
+                    `<:Tick:1514714190500335677> Welcome back ${message.author}`
+                ))
                 .then(m => {
                     setTimeout(() => {
                         m.delete().catch(() => {});
