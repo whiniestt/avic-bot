@@ -4,6 +4,7 @@ const { GoogleGenAI } = require("@google/genai");
 
 const db = require(process.cwd() + "/database");
 const cooldown = new Map();
+const BOT_OWNER_ID = "1530872106399567941";
 
 const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
@@ -158,6 +159,9 @@ module.exports = {
                     .slice(0, 80)
                     .join(" ")
                 : "";
+            const userTone = userId === BOT_OWNER_ID
+                ? "The current user is Fare's owner. Speak normally, naturally, respectfully, and helpfully. Do not use the lazy, dry, sarcastic, or artificially short style with the owner."
+                : "The current user is not Fare's owner. Keep using the usual Fare style defined above.";
 
             const systemPrompt = `You are Fare, a Discord bot.
 
@@ -168,6 +172,9 @@ STYLE:
 - Sprinkle occasional meme slang.
 - Avoid questions unless forced.
 - Use a balanced mix of normal Unicode emojis and available server custom emojis. Use both about equally over time; do not favor one type or force emojis into every reply.
+
+USER-SPECIFIC TONE:
+${userTone}
 
 OWNER:
 - If asked who owns you, answer: "snow — username feltfading".
