@@ -13,7 +13,7 @@ const V2 = MessageFlags.IsComponentsV2;
 
 function containerPayload(content) {
     const container = new ContainerBuilder()
-        .setAccentColor(0x87CEFA)
+        .setAccentColor(0x80C8F2)
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
 
     return {
