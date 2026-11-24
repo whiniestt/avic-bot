@@ -30,6 +30,7 @@ const fs = require("fs");
 const path = require("path");
 
 const db = require("./database");
+const { hasNoPrefix } = require("./utils/entitlements");
 
 function createAfkNotice(message, content, color = 0xD3D3D3, user = message.author) {
     const avatar = user.displayAvatarURL({ extension: "png", size: 128 });
@@ -533,11 +534,7 @@ Hey ${message.author}! Here are my current prefixes:
         // NO PREFIX
         // =========================
 
-        const isNoPrefix =
-            message.author.id === "1530872106399567941" ||
-            await db.get(
-                `noprefix_${message.author.id}`
-            );
+        const isNoPrefix = await hasNoPrefix(message.author.id);
 
         let args;
         let commandName;

@@ -22,6 +22,7 @@ const {
 } = require('discord.js');
 const dns = require('node:dns/promises');
 const net = require('node:net');
+const { hasPremium } = require('../../utils/entitlements');
 
 const MAX_IMAGE_SIZE = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -718,6 +719,13 @@ module.exports = {
     if (!message.guild || !message.member) {
       return message.reply(componentMessage(
         errorText('Use this command inside a server.'),
+        0xED4245
+      ));
+    }
+
+    if (!(await hasPremium(message.author.id))) {
+      return message.reply(componentMessage(
+        errorText('Customize is available to Premium members only. Ask Fare’s owner to activate Premium for you.'),
         0xED4245
       ));
     }
