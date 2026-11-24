@@ -306,7 +306,7 @@ const updateStatus = () => {
         status: "dnd",
         activities: [
             {
-                name: "FareeBot",
+                name: "Fare goes offline in 20 days… back soon!",
                 type: 1,
                 url: "https://www.twitch.tv/FareeBot"
             }
