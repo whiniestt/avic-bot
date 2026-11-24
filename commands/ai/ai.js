@@ -9,6 +9,80 @@ const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
 });
 
+const AI_MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash"
+];
+const MAX_ATTEMPTS_PER_MODEL = 2;
+
+function errorDetails(error) {
+    let payload = error;
+    if (typeof error?.message === "string") {
+        try {
+            payload = JSON.parse(error.message);
+        } catch {
+            // Keep the SDK error object when the message is not JSON.
+        }
+    }
+
+    const apiError = payload?.error || payload;
+    const statusCode = Number(
+        error?.status ?? error?.statusCode ?? error?.code ?? apiError?.code
+    );
+    const statusName = String(apiError?.status || error?.status || "").toUpperCase();
+    const message = String(apiError?.message || error?.message || "");
+
+    return { statusCode, statusName, message };
+}
+
+function isTemporaryAiError(error) {
+    const { statusCode, statusName } = errorDetails(error);
+    return [408, 429, 500, 502, 503, 504].includes(statusCode) ||
+        ["UNAVAILABLE", "RESOURCE_EXHAUSTED", "DEADLINE_EXCEEDED", "INTERNAL"].includes(statusName);
+}
+
+function isModelUnavailable(error) {
+    const { statusCode, message } = errorDetails(error);
+    return statusCode === 404 && /model.*(not found|not available|unsupported)|(?:not found|not available).*model/i.test(message);
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function generateWithFallback(contents) {
+    let lastError;
+
+    for (const model of AI_MODELS) {
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_MODEL; attempt++) {
+            try {
+                return await ai.models.generateContent({ model, contents });
+            } catch (error) {
+                lastError = error;
+                const retryable = isTemporaryAiError(error);
+                const modelUnavailable = isModelUnavailable(error);
+
+                console.error(
+                    `FARE AI MODEL ERROR (${model}, attempt ${attempt}):`,
+                    error?.message || error
+                );
+
+                if (retryable && attempt < MAX_ATTEMPTS_PER_MODEL) {
+                    const backoffMs = 1000 * (2 ** (attempt - 1)) + Math.floor(Math.random() * 500);
+                    await wait(backoffMs);
+                    continue;
+                }
+
+                if (retryable || modelUnavailable) break;
+                throw error;
+            }
+        }
+    }
+
+    throw lastError || new Error("All configured AI models failed.");
+}
+
 module.exports = {
     name: "ai",
     aliases: ["ask", "chat"],
@@ -125,11 +199,8 @@ ${query}
 Fare:
 `;
 
-            // GEMINI
-            const response = await ai.models.generateContent({
-                model: "gemini-3.1-flash-lite",
-                contents: prompt
-            });
+            // Try the primary model, retry transient errors, then fall back to other models.
+            const response = await generateWithFallback(prompt);
 
             const reply =
                 response.text?.trim();
@@ -201,15 +272,16 @@ if (aiEmoji) {
                 error?.message || error
             );
 
+            const { statusCode, statusName } = errorDetails(error);
             let errorMessage =
-                "❌ Fare is having trouble right now. Try again shortly.";
+                "❌ I couldn't reach an AI model to answer that.";
 
-            if (
-                error?.status === 429 ||
-                error?.message?.includes("429")
-            ) {
+            if (statusCode === 429 || statusName === "RESOURCE_EXHAUSTED") {
                 errorMessage =
-                    "⏳ Fare is temporarily rate-limited. Try again in a moment.";
+                    "⏳ AI capacity is currently exhausted across my available models.";
+            } else if (statusCode === 503 || statusName === "UNAVAILABLE") {
+                errorMessage =
+                    "⚠️ My AI providers are temporarily unavailable, so I couldn't generate a reliable answer.";
             }
 
             return loading.edit(
