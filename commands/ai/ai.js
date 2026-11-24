@@ -1,10 +1,27 @@
-const { EmbedBuilder } = require("discord.js");
+const {
+    ContainerBuilder,
+    TextDisplayBuilder,
+    MessageFlags
+} = require("discord.js");
 const { QuickDB } = require("quick.db");
 const { GoogleGenAI } = require("@google/genai");
 
 const db = require(process.cwd() + "/database");
 const cooldown = new Map();
 const BOT_OWNER_ID = "1530872106399567941";
+const V2 = MessageFlags.IsComponentsV2;
+
+function containerPayload(content) {
+    const container = new ContainerBuilder()
+        .setAccentColor(0xD3D3D3)
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
+
+    return {
+        components: [container],
+        flags: V2,
+        allowedMentions: { parse: [], repliedUser: false }
+    };
+}
 
 const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
@@ -95,22 +112,17 @@ module.exports = {
 
         // HELP
         if (!query) {
-            const embed = new EmbedBuilder()
-                .setColor("#D3D3D3")
-                .setTitle("<:info:1514699288674828310> AI Command Help")
-                .setDescription(
-`**\`\`\`yml
+            return message.reply(containerPayload(
+`## <:info:1514699288674828310> AI Command Help
+
+**\`\`\`yml
 <..> <required> | [..] [optional]
 \`\`\`**
 
 > **\`,ai <query>\`**
 
 <:arrow:1514699753462566953> Ask Fare anything.`
-                );
-
-            return message.reply({
-                embeds: [embed]
-            });
+            ));
         }
 
         // COOLDOWN
@@ -120,17 +132,17 @@ module.exports = {
                 cooldown.get(userId) - Date.now();
 
             if (remaining > 0) {
-                return message.reply(
+                return message.reply(containerPayload(
                     `<a:clockk:1514734530282520647> Wait **${Math.ceil(
                         remaining / 1000
                     )}s** before using Fare again.`
-                );
+                ));
             }
         }
 
-        const loading = await message.reply(
+        const loading = await message.reply(containerPayload(
             "<a:loading_Google:1514727933183524964> Typing..."
-        );
+        ));
 
         try {
 
@@ -220,9 +232,9 @@ Fare:
                 response.text?.trim();
 
             if (!reply) {
-                return loading.edit(
+                return loading.edit(containerPayload(
                     "❌ Fare couldn't generate a response. Try again."
-                );
+                ));
             }
 
             // SAVE MEMORY
@@ -264,7 +276,7 @@ Fare:
                 );
             }
 
-            await loading.edit(chunks[0]);
+            await loading.edit(containerPayload(chunks[0]));
             const aiEmoji = message.client.emojis.cache.get(
     "1514699727072133233"
 );
@@ -274,9 +286,7 @@ if (aiEmoji) {
 }
 
             for (let i = 1; i < chunks.length; i++) {
-                await message.channel.send(
-                    chunks[i]
-                );
+                await message.channel.send(containerPayload(chunks[i]));
             }
 
         } catch (error) {
@@ -298,9 +308,7 @@ if (aiEmoji) {
                     "⚠️ My AI providers are temporarily unavailable, so I couldn't generate a reliable answer.";
             }
 
-            return loading.edit(
-                errorMessage
-            );
+            return loading.edit(containerPayload(errorMessage));
         }
     }
 };
