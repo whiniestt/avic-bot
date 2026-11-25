@@ -293,7 +293,7 @@ client.once("clientReady", () => {
 
     require("./events/giveawayManager")(client);
 
- // =========================
+// =========================
 // FARE PLAYING PRESENCE (5 MIN REFRESH)
 // =========================
 
@@ -302,18 +302,20 @@ const updateStatus = () => {
         (total, guild) => total + (guild.memberCount || 0),
         0
     );
+    const servers = client.guilds.cache.size;
 
     client.user.setPresence({
         status: "dnd",
         activities: [
             {
-                name: "Fare goes offline in 10 days… back soon!",
+                name: "custom",
+                state: `${users.toLocaleString("en-US")} Users | ${servers.toLocaleString("en-US")} Servers`,
                 type: 4
             }
         ]
     });
 
-    console.log("🔄 Online playing activity updated.");
+    console.log("🔄 Presence updated.");
 };
 
 updateStatus();
