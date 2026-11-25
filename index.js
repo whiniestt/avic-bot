@@ -308,7 +308,8 @@ const updateStatus = () => {
         activities: [
             {
                 name: "Fare goes offline in 20 days… back soon!",
-                type: 2
+                type: 1,
+                url: "https://www.twitch.tv/FareeBot"
             }
         ]
     });
