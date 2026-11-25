@@ -307,7 +307,7 @@ const updateStatus = () => {
         status: "online",
         activities: [
             {
-                name: "Fare goes offline in 20 days… back soon!",
+                name: "Fare goes offline in 10 days… back soon!",
                 type: 4
             }
         ]
