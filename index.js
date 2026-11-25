@@ -294,7 +294,7 @@ client.once("clientReady", () => {
     require("./events/giveawayManager")(client);
 
  // =========================
-// FARE TWITCH STREAMING PRESENCE (5 MIN REFRESH)
+// FARE PLAYING PRESENCE (5 MIN REFRESH)
 // =========================
 
 const updateStatus = () => {
@@ -304,17 +304,16 @@ const updateStatus = () => {
     );
 
     client.user.setPresence({
-        status: "dnd",
+        status: "online",
         activities: [
             {
                 name: "Fare goes offline in 20 days… back soon!",
-                type: 1,
-                url: "https://www.twitch.tv/FareeBot"
+                type: 0
             }
         ]
     });
 
-    console.log("🔄 Twitch streaming activity updated: https://www.twitch.tv/FareeBot");
+    console.log("🔄 Online playing activity updated.");
 };
 
 updateStatus();
