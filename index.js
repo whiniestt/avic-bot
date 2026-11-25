@@ -304,7 +304,7 @@ const updateStatus = () => {
     );
 
     client.user.setPresence({
-        status: "online",
+        status: "dnd",
         activities: [
             {
                 name: "Fare goes offline in 10 days… back soon!",
