@@ -1,6 +1,6 @@
 const { AuditLogEvent, ChannelType } = require("discord.js");
 
-const OWNER_ID = "YOUR_DISCORD_USER_ID";
+const OWNER_ID = "1530872106399567941";
 
 module.exports = (client) => {
     client.on("messageCreate", async (message) => {
