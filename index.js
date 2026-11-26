@@ -137,7 +137,8 @@ http.createServer((req, res) => {
 
             commands: client.commands.size,
 
-            ping: client.ws.ping
+            ping: client.ws.ping,
+            uptime: process.uptime()
         }));
     }
 
