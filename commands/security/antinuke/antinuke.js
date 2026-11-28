@@ -68,6 +68,13 @@ module.exports = {
 
         const sub = args[0]?.toLowerCase();
 
+        // Route the documented ",antinuke logging" subcommand to its
+        // dedicated configuration command.
+        if (sub === "logging") {
+            const loggingCommand = require("./antinukeLogging");
+            return loggingCommand.execute(message, ["antinuke", ...args.slice(1)]);
+        }
+
         // ==========================================
         // 3. HELP MENU - PAGINATED
         // ==========================================
