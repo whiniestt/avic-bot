@@ -214,9 +214,14 @@ module.exports = {
 
         if (sub === "whitelisted") {
             const rows = [];
-            for (const [key, value] of await db.all()) {
-                const prefix = `antinuke_whitelist_${guildId}_`;
-                if (key.startsWith(prefix) && value) rows.push(`• <@${key.slice(prefix.length)}>`);
+            const prefix = `antinuke_whitelist_${guildId}_`;
+            const entries = await db.all();
+            for (const entry of entries) {
+                const key = entry.id ?? entry.key;
+                const value = entry.value;
+                if (typeof key === "string" && key.startsWith(prefix) && value) {
+                    rows.push(`• <@${key.slice(prefix.length)}>`);
+                }
             }
             return message.reply(v2(panel("Whitelisted Users", rows.length ? rows.join("\n") : "No users are whitelisted.")));
         }
