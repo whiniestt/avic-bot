@@ -256,34 +256,43 @@ const DEFAULT_PREFIX = ",";
 // =========================
 
 const foldersPath = path.join(__dirname, "commands");
-const commandFolders = fs.readdirSync(foldersPath);
 
-for (const folder of commandFolders) {
-    if (folder === "music") continue;
+// Recursively load commands, including nested security modules.
+function loadCommands(directory) {
+    const entries = fs.readdirSync(directory, { withFileTypes: true });
 
-    const commandsPath = path.join(foldersPath, folder);
+    for (const entry of entries) {
+        const entryPath = path.join(directory, entry.name);
 
-    if (!fs.statSync(commandsPath).isDirectory()) continue;
+        if (entry.isDirectory()) {
+            if (entry.name.toLowerCase() === "music") continue;
+            loadCommands(entryPath);
+            continue;
+        }
 
-    const commandFiles = fs
-        .readdirSync(commandsPath)
-        .filter(file => file.endsWith(".js"));
+        if (!entry.isFile() || !entry.name.endsWith(".js")) continue;
+        if (path.relative(foldersPath, entryPath).split(path.sep)[0] === "slash") continue;
 
-    for (const file of commandFiles) {
-        const filePath = path.join(commandsPath, file);
-        const command = require(filePath);
+        try {
+            const command = require(entryPath);
+            if (!command?.name || typeof command.execute !== "function") continue;
 
-        if (command.name) {
-            client.commands.set(command.name, command);
-
+            client.commands.set(command.name.toLowerCase(), command);
             if (Array.isArray(command.aliases)) {
                 for (const alias of command.aliases) {
-                    client.commands.set(alias, command);
+                    if (typeof alias === "string" && alias.length) {
+                        client.commands.set(alias.toLowerCase(), command);
+                    }
                 }
             }
+            console.log(`[COMMAND] Loaded ${command.name} from ${path.relative(__dirname, entryPath)}`);
+        } catch (error) {
+            console.error(`[COMMAND] Failed to load ${entryPath}:`, error);
         }
     }
 }
+
+loadCommands(foldersPath);
 
 // =========================
 // BOT READY
