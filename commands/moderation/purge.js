@@ -50,10 +50,21 @@ module.exports = {
         .setFooter({ text: `Requested by ${message.author.username}` })
         .setTimestamp();
 
+      const mentionedUserIds = [...counts.keys()];
+
       return message.channel.send({
+        // Mentions in embeds do not generate notifications. Put the mentions
+        // in message content and explicitly allow only the users purged.
+        content: mentionedUserIds.length
+          ? mentionedUserIds.map(userId => `<@${userId}>`).join(" ")
+          : undefined,
         embeds: [embed],
-        // Keep visible user mentions in the embed, but do not send notifications.
-        allowedMentions: { parse: [], users: [], roles: [], repliedUser: false }
+        allowedMentions: {
+          parse: [],
+          users: mentionedUserIds,
+          roles: [],
+          repliedUser: false
+        }
       });
     };
 
