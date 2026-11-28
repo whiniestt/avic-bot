@@ -1,96 +1,89 @@
 const cooldown = new Map();
+const { EmbedBuilder } = require("discord.js");
 
 module.exports = {
   name: "purge",
-  async execute(message, args) {
-
+  async execute(message, args = []) {
     if (!message.member.permissions.has("ManageMessages")) {
       return message.reply("❌ You don't have permission to purge messages!");
     }
 
-    // 10s cooldown
     const now = Date.now();
     const lastUsed = cooldown.get(message.author.id);
-
     if (lastUsed && now - lastUsed < 10000) {
       return message.reply("⏳ Wait 10 seconds before using purge again!");
     }
-
     cooldown.set(message.author.id, now);
 
     const targetUser = message.mentions.users.first();
-
-    // BOT MODE: !purge bots OR !pb
     const isBotMode =
       args[0] === "bots" ||
       args[0] === "bot" ||
       args[0] === "pb" ||
       message.content.startsWith("!pb");
 
-    // helper for limit
     const limit = (n) => {
-      if (!n || isNaN(n)) return 10;
-      if (n > 100) return 100;
-      return n;
+      if (!n || Number.isNaN(n)) return 10;
+      return Math.min(Math.max(n, 1), 100);
     };
 
-    let amount;
+    const sendSummary = async (deletedMessages, title = "Purge Summary") => {
+      const counts = new Map();
+      for (const msg of deletedMessages.values()) {
+        if (msg.id === message.id) continue;
+        counts.set(msg.author.id, (counts.get(msg.author.id) || 0) + 1);
+      }
 
-    // ---------------------------
-    // 1️⃣ BOT PURGE
-    // ---------------------------
+      const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+      const details = [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([userId, count]) => `<@${userId}> — **${count}** messages deleted`);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setTitle(title)
+        .setDescription([
+          `🧹 **Purged ${total} messages.**`,
+          "",
+          ...(details.length ? details : ["No messages were deleted."])
+        ].join("\n"))
+        .setFooter({ text: `Requested by ${message.author.username}` })
+        .setTimestamp();
+
+      return message.channel.send({
+        embeds: [embed],
+        // Keep visible user mentions in the embed, but do not send notifications.
+        allowedMentions: { parse: [], users: [], roles: [], repliedUser: false }
+      });
+    };
+
     if (isBotMode) {
-
-      amount = limit(parseInt(args[1]));
-
+      const amount = limit(parseInt(args[1], 10));
       const messages = await message.channel.messages.fetch({ limit: 100 });
-
-      const botMessages = messages
-        .filter(m => m.author.bot)
-        .first(amount);
-
-      await message.channel.bulkDelete(botMessages, true);
-
-      return message.channel.send(
-        `🧹 Purged **${botMessages.length} bot messages**`
-      );
+      const botMessages = messages.filter(m => m.author.bot && m.id !== message.id).first(amount);
+      const deleted = await message.channel.bulkDelete(botMessages, true);
+      return sendSummary(deleted, "Bot Purge Summary");
     }
 
-    // ---------------------------
-    // 2️⃣ USER PURGE
-    // ---------------------------
     if (targetUser) {
-
-      amount = limit(parseInt(args[1]));
-
+      const amount = limit(parseInt(args[1], 10));
       const messages = await message.channel.messages.fetch({ limit: 100 });
-
       const userMessages = messages
-        .filter(m => m.author.id === targetUser.id)
+        .filter(m => m.author.id === targetUser.id && m.id !== message.id)
         .first(amount);
-
-      await message.channel.bulkDelete(userMessages, true);
-
-      return message.channel.send(
-        `🧹 Purged **${userMessages.length} messages from ${targetUser.username}**`
-      );
+      const deleted = await message.channel.bulkDelete(userMessages, true);
+      return sendSummary(deleted, "User Purge Summary");
     }
 
-    // ---------------------------
-    // 3️⃣ NORMAL PURGE
-    // ---------------------------
-    amount = parseInt(args[0]);
-
-    if (!amount) {
-      return message.reply("❌ Use: `!purge {number}`");
+    const requested = parseInt(args[0], 10);
+    if (!Number.isInteger(requested) || requested < 1) {
+      return message.reply("❌ Use: `,purge <number>` or `,purge @user <number>`");
     }
 
-    amount = limit(amount);
-
-    const deleted = await message.channel.bulkDelete(amount + 1, true);
-
-    return message.channel.send(
-      `🧹 Purged **${deleted.size - 1} messages**`
-    );
+    const amount = limit(requested);
+    const messages = await message.channel.messages.fetch({ limit: Math.min(amount + 1, 100) });
+    const selected = messages.first(amount + 1);
+    const deleted = await message.channel.bulkDelete(selected, true);
+    return sendSummary(deleted, "Purge Summary");
   }
 };
