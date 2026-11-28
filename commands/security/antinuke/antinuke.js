@@ -1,606 +1,227 @@
-const { QuickDB } = require("quick.db");
 const db = require(process.cwd() + "/database");
-
 const {
-    EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ComponentType,
+    ContainerBuilder,
+    TextDisplayBuilder,
+    SeparatorBuilder,
+    MessageFlags,
     PermissionFlagsBits
 } = require("discord.js");
 
-const cooldown = new Map();
+const MODULES = [
+    ["ban", "Ban"],
+    ["kick", "Kick"],
+    ["memberupdate", "Member Update"],
+    ["rolecreate", "Role Create"],
+    ["roledelete", "Role Delete"],
+    ["roleupdate", "Role Update"],
+    ["channelcreate", "Channel Create"],
+    ["channeldelete", "Channel Delete"],
+    ["channelupdate", "Channel Update"],
+    ["webhookcreate", "Webhook Create"],
+    ["webhookdelete", "Webhook Delete"],
+    ["webhookupdate", "Webhook Update"],
+    ["botadd", "Bot Add"],
+    ["guildupdate", "Guild Update"],
+    ["mention", "Mention Spam"]
+];
+
+const DEFAULT_FILTERS = Object.fromEntries(MODULES.map(([key]) => [key, true]));
+const cooldowns = new Map();
+
+function panel(title, body, color = 0x777777) {
+    return new ContainerBuilder()
+        .setAccentColor(color)
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}\n${body}`));
+}
+
+function v2(container, extra = {}) {
+    return {
+        components: [container],
+        flags: MessageFlags.IsComponentsV2,
+        allowedMentions: { parse: [], repliedUser: false },
+        ...extra
+    };
+}
+
+function isOwner(message) {
+    return message.guild.ownerId === message.author.id;
+}
+
+async function getFilters(guildId) {
+    return { ...DEFAULT_FILTERS, ...(await db.get(`antinuke_filters_${guildId}`) || {}) };
+}
+
+async function showConfig(message) {
+    const guildId = message.guild.id;
+    const enabled = (await db.get(`antinuke_${guildId}`)) === true;
+    const filters = await getFilters(guildId);
+    const lines = MODULES.map(([key, label]) => `${filters[key] ? "🟢" : "⚫"} ${label}`);
+    const logId = await db.get(`antinuke_logging_${guildId}`);
+    const logChannel = logId ? message.guild.channels.cache.get(logId) : null;
+    const box = panel(
+        "Antinuke Configuration",
+        `**Status:** ${enabled ? "🟢 Enabled" : "🔴 Disabled"}\n**Autorecovery:** ${(await db.get(`antinuke_autorecovery_${guildId}`)) ? "On" : "Off"}\n**Owner-only security:** ${(await db.get(`antinuke_owneronly_${guildId}`)) ? "On" : "Off"}\n**Limit mode:** ${(await db.get(`antinuke_limitmode_${guildId}`)) ? "On" : "Off"}\n**Log channel:** ${logChannel || "Not set"}\n\n**Protection modules**\n${lines.join("\n")}`
+    );
+    return message.reply(v2(box));
+}
 
 module.exports = {
     name: "antinuke",
-    description: "Configure and manage server antinuke protection settings.",
+    aliases: ["anti-nuke"],
+    description: "Configure Fare's server protection.",
 
-    async execute(message, args) {
+    async execute(message, args = []) {
+        if (!message.guild || !message.member) return;
+        const guildId = message.guild.id;
+        const sub = (args[0] || "").toLowerCase();
 
-        // ==========================================
-        // 1. SECURITY & PERMISSIONS GUARD
-        // ==========================================
-        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return message.reply({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor("#FF7F7F")
-                        .setDescription(
-                            "<a:spider_cross:1514728338701287640> **Access Denied:** You need **Administrator** permissions to manage Antinuke configurations."
-                        )
-                ]
-            });
+        const ownerOnly = (await db.get(`antinuke_owneronly_${guildId}`)) === true;
+        if (ownerOnly && !isOwner(message)) {
+            return message.reply(v2(panel("Owner Only", "Only the server owner can use Antinuke management.", 0xED4245)));
+        }
+        if (!message.member.permissions.has(PermissionFlagsBits.Administrator) && !isOwner(message)) {
+            return message.reply(v2(panel("Access Denied", "Administrator permission is required.", 0xED4245)));
         }
 
-        // ==========================================
-        // 2. COOLDOWN SYSTEM
-        // ==========================================
-        const cooldownTime = 3000;
+        const last = cooldowns.get(message.author.id) || 0;
+        if (Date.now() - last < 1800) return;
+        cooldowns.set(message.author.id, Date.now());
 
-        if (cooldown.has(message.author.id)) {
-            const timeLeft = (
-                (cooldown.get(message.author.id) - Date.now()) / 1000
-            ).toFixed(1);
-
-            if (timeLeft > 0) {
-                return message.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor("#FF7F7F")
-                            .setDescription(
-                                `<:WarningIcon:1514708751385497721> You are under cooldown.\n\n<:arrow:1514699753462566953> Cooldown • \`${timeLeft}s\``
-                            )
-                    ]
-                });
-            }
-        }
-
-        cooldown.set(
-            message.author.id,
-            Date.now() + cooldownTime
-        );
-
-        setTimeout(() => {
-            cooldown.delete(message.author.id);
-        }, cooldownTime);
-
-        const sub = args[0]?.toLowerCase();
-
-        // Route the documented ",antinuke logging" subcommand to its
-        // dedicated configuration command.
         if (sub === "logging") {
-            const loggingCommand = require("./antinukeLogging");
-            return loggingCommand.execute(message, ["antinuke", ...args.slice(1)]);
+            const command = require("./antinukeLogging");
+            return command.execute(message, ["antinuke", ...args.slice(1)]);
         }
 
-        // ==========================================
-        // 3. HELP MENU - PAGINATED
-        // ==========================================
-        if (!sub) {
+        if (!sub || sub === "config") return showConfig(message);
 
-            const pages = [
-                {
-                    title: "<:shield:1514699900225323108> Antinuke System",
-                    description:
-`<a:MekoLoading:1514728537452708022> **Available Antinuke Commands [13]**
-
-\`,antinuke enable\`
-> Enable and configure antinuke protection.
-
-\`,antinuke disable\`
-> Disable server protection.
-
-\`,antinuke autorecovery\`
-> Manage server autorecovery settings.
-
-\`,antinuke betrayalguard\`
-> Enable or disable betrayal guard.
-
-\`,antinuke limit\`
-> Set security limits.
-
-\`,antinuke logging\`
-> Set antinuke log channel.
-
-\`,antinuke manage\`
-> Manage all settings.`
-                },
-
-                {
-                    title: "<:shield:1514699900225323108> Antinuke System",
-                    description:
-`<a:MekoLoading:1514728537452708022> **Available Antinuke Commands [13]**
-
-\`,antinuke reset\`
-> Reset all data.
-
-\`,antinuke whitelist\`
-> Manage whitelist users.
-
-\`,antinuke trustlimit\`
-> Set trusted limits.
-
-\`,antinuke wallon / walloff\`
-> Toggle wall protection.
-
-\`,antinuke wizard\`
-> One-click setup.
-
-\`,antinuke zplus\`
-> Advanced protection system.`
-                }
-            ];
-
-            let page = 0;
-
-            const getEmbed = () => {
-                return new EmbedBuilder()
-                    .setColor("#D3D3D3")
-                    .setTitle(pages[page].title)
-                    .setDescription(pages[page].description)
-                    .setFooter({
-                        text: `Page ${page + 1}/${pages.length} | Requested By ${message.author.username}`
-                    });
-            };
-
-            const row = new ActionRowBuilder()
-                .addComponents(
-
-                    new ButtonBuilder()
-                        .setCustomId("first")
-                        .setEmoji("<:backward:1533527358500503703>")
-                        .setStyle(ButtonStyle.Secondary),
-
-                    new ButtonBuilder()
-                        .setCustomId("previous")
-                        .setEmoji("<:previous:1533532115311005817>")
-                        .setStyle(ButtonStyle.Secondary),
-
-                    new ButtonBuilder()
-                        .setCustomId("delete")
-                        .setEmoji("<:delete:1533526007112400956>")
-                        .setStyle(ButtonStyle.Danger),
-
-                    new ButtonBuilder()
-                        .setCustomId("next")
-                        .setEmoji("<:next:1533532139415408881>")
-                        .setStyle(ButtonStyle.Secondary),
-
-                    new ButtonBuilder()
-                        .setCustomId("last")
-                        .setEmoji("<:forward:1533527377727066214>")
-                        .setStyle(ButtonStyle.Secondary)
-                );
-
-            const msg = await message.reply({
-                embeds: [getEmbed()],
-                components: [row]
-            });
-
-            const collector = msg.createMessageComponentCollector({
-                time: 300000
-            });
-
-            collector.on("collect", async interaction => {
-
-                if (interaction.user.id !== message.author.id) {
-                    return interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("#FF7F7F")
-                                .setDescription(
-                                    "<a:spider_cross:1514728338701287640> This menu isn't yours."
-                                )
-                        ],
-                        ephemeral: true
-                    });
-                }
-
-                // DELETE
-                if (interaction.customId === "delete") {
-                    collector.stop();
-                    return msg.delete().catch(() => {});
-                }
-
-                // FIRST PAGE
-                if (interaction.customId === "first") {
-                    page = 0;
-                }
-
-                // PREVIOUS PAGE
-                if (interaction.customId === "previous") {
-                    page = Math.max(0, page - 1);
-                }
-
-                // NEXT PAGE
-                if (interaction.customId === "next") {
-                    page = Math.min(pages.length - 1, page + 1);
-                }
-
-                // LAST PAGE
-                if (interaction.customId === "last") {
-                    page = pages.length - 1;
-                }
-
-                await interaction.update({
-                    embeds: [getEmbed()],
-                    components: [row]
-                });
-            });
-
-            collector.on("end", async () => {
-                await msg.edit({
-                    components: []
-                }).catch(() => {});
-            });
-
-            return;
-        }
-
-        // ==========================================
-        // 4. SUBCOMMANDS: ENABLE & MANAGE
-        // ==========================================
-        if (sub === "enable" || sub === "manage") {
-
-            const enabled = await db.get(
-                `antinuke_${message.guild.id}`
-            );
-
-            if (sub === "enable" && enabled === true) {
-                return message.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor("#FFCC66")
-                            .setDescription(
-                                `<:WarningIcon:1514708751385497721> Antinuke is already enabled.\n\nUse \`,antinuke manage\` to edit settings.`
-                            )
-                    ]
-                });
-            }
-
-            if (sub === "manage" && enabled !== true) {
-                return message.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor("#FF7F7F")
-                            .setDescription(
-                                "<:WarningIcon:1514708751385497721> Antinuke is currently disabled in this server."
-                            )
-                    ]
-                });
-            }
-
-            const currentFilters =
-                (await db.get(
-                    `antinuke_filters_${message.guild.id}`
-                )) || {
-                    ban: true,
-                    kick: true,
-                    botadd: true,
-                    channeldelete: true,
-                    roledelete: true,
-                    guildupdate: true,
-                    webhook: true,
-                    mention: true
-                };
-
-            const getDisplayDescription = (f) =>
-`Configure your server protection before enabling Antinuke.
-
-${f.ban ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} Ban
-${f.kick ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} Kick
-${f.botadd ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} Bot Add
-${f.channeldelete ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} Channel Delete
-${f.roledelete ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} Role Delete
-${f.guildupdate ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} Guild Update
-${f.webhook ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} Webhook
-${f.mention ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} Mention Spam`;
-
-            const embed = new EmbedBuilder()
-                .setColor("#D3D3D3")
-                .setTitle(
-                    sub === "enable"
-                        ? "<:shield:1514699900225323108> Antinuke Setup"
-                        : "<:shield:1514699900225323108> Antinuke Manage Panel"
-                )
-                .setDescription(
-                    getDisplayDescription(currentFilters)
-                );
-
+        if (sub === "enable" || sub === "manage" || sub === "wizard") {
+            const filters = await getFilters(guildId);
             const menu = new StringSelectMenuBuilder()
-                .setCustomId("antinuke_menu")
-                .setPlaceholder("Toggle protections")
-                .addOptions([
-                    {
-                        label: "Ban",
-                        value: "ban"
-                    },
-                    {
-                        label: "Kick",
-                        value: "kick"
-                    },
-                    {
-                        label: "Bot Add",
-                        value: "botadd"
-                    },
-                    {
-                        label: "Channel Delete",
-                        value: "channeldelete"
-                    },
-                    {
-                        label: "Role Delete",
-                        value: "roledelete"
-                    },
-                    {
-                        label: "Guild Update",
-                        value: "guildupdate"
-                    },
-                    {
-                        label: "Webhook",
-                        value: "webhook"
-                    },
-                    {
-                        label: "Mention Spam",
-                        value: "mention"
-                    }
-                ]);
-
-            const buttons = new ActionRowBuilder()
-                .addComponents(
-
-                    new ButtonBuilder()
-                        .setCustomId("save")
-                        .setLabel("Save")
-                        .setStyle(ButtonStyle.Success),
-
-                    new ButtonBuilder()
-                        .setCustomId("cancel")
-                        .setLabel("Cancel")
-                        .setStyle(ButtonStyle.Danger)
-                );
-
-            const rows = [
-                new ActionRowBuilder().addComponents(menu),
-                buttons
-            ];
-
-            const panel = await message.reply({
-                embeds: [embed],
-                components: rows
-            });
-
-            const collector =
-                panel.createMessageComponentCollector({
-                    time: 300000
-                });
-
+                .setCustomId("fare_antinuke_modules")
+                .setPlaceholder("Select protection modules")
+                .setMinValues(0)
+                .setMaxValues(MODULES.length)
+                .addOptions(MODULES.map(([value, label]) => ({
+                    label,
+                    value,
+                    default: filters[value] === true
+                })));
+            const buttons = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId("fare_antinuke_all_on").setLabel("Enable All").setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId("fare_antinuke_all_off").setLabel("Disable All").setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId("fare_antinuke_save").setLabel("Save").setStyle(ButtonStyle.Primary)
+            );
+            const container = panel(
+                sub === "enable" || sub === "wizard" ? "Antinuke Setup" : "Antinuke Management",
+                "Select the filters below to enable or disable them.\n\n" +
+                MODULES.map(([key, label]) => `${filters[key] ? "🟢" : "⚫"} ${label}`).join("\n")
+            ).addSeparatorComponents(new SeparatorBuilder())
+             .addActionRowComponents(new ActionRowBuilder().addComponents(menu))
+             .addActionRowComponents(buttons);
+            const sent = await message.reply(v2(container));
+            const collector = sent.createMessageComponentCollector({ time: 300000 });
             collector.on("collect", async interaction => {
-
                 if (interaction.user.id !== message.author.id) {
-                    return interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("#FF7F7F")
-                                .setDescription(
-                                    "<a:spider_cross:1514728338701287640> This menu isn't yours."
-                                )
-                        ],
-                        ephemeral: true
-                    });
+                    return interaction.reply({ content: "This panel belongs to someone else.", ephemeral: true });
                 }
-
-                if (interaction.isStringSelectMenu()) {
-
-                    const value = interaction.values[0];
-
-                    currentFilters[value] =
-                        !currentFilters[value];
-
-                    embed.setDescription(
-                        getDisplayDescription(currentFilters)
-                    );
-
-                    return interaction.update({
-                        embeds: [embed],
-                        components: rows
-                    });
+                if (interaction.customId === "fare_antinuke_modules") {
+                    for (const [key] of MODULES) filters[key] = interaction.values.includes(key);
+                } else if (interaction.customId === "fare_antinuke_all_on") {
+                    for (const [key] of MODULES) filters[key] = true;
+                } else if (interaction.customId === "fare_antinuke_all_off") {
+                    for (const [key] of MODULES) filters[key] = false;
+                } else if (interaction.customId === "fare_antinuke_save") {
+                    await db.set(`antinuke_filters_${guildId}`, filters);
+                    await db.set(`antinuke_${guildId}`, true);
+                    collector.stop("saved");
+                    const done = panel("Antinuke Enabled", "Your selected protection modules have been saved.\n\nUse `,antinuke config` to review the configuration.", 0x57F287);
+                    return interaction.update(v2(done));
                 }
-
-                if (interaction.isButton()) {
-
-                    collector.stop();
-
-                    if (interaction.customId === "cancel") {
-
-                        return interaction.update({
-                            embeds: [
-                                new EmbedBuilder()
-                                    .setColor("#D3D3D3")
-                                    .setDescription(
-                                        "<a:spider_cross:1514728338701287640> Configuration updates cancelled."
-                                    )
-                            ],
-                            components: []
-                        });
-                    }
-
-                    if (interaction.customId === "save") {
-
-                        await db.set(
-                            `antinuke_${message.guild.id}`,
-                            true
-                        );
-
-                        await db.set(
-                            `antinuke_filters_${message.guild.id}`,
-                            currentFilters
-                        );
-
-                        const finalTitle =
-                            sub === "enable"
-                                ? "<:shield:1514705361935012081> Antinuke System Activated"
-                                : "<:shield:1514699900225323108> Antinuke Settings Saved";
-
-                        return interaction.update({
-                            embeds: [
-                                new EmbedBuilder()
-                                    .setColor("#57F287")
-                                    .setTitle(finalTitle)
-                                    .setDescription(
-                                        `<a:Animated_Tick:1514714209085292564> Settings saved successfully.\n\n<:arrow:1514699753462566953> Your server is now fully secured.`
-                                    )
-                            ],
-                            components: []
-                        });
-                    }
-                }
+                const refreshed = panel(
+                    "Antinuke Management",
+                    "Select the filters below to enable or disable them.\n\n" +
+                    MODULES.map(([key, label]) => `${filters[key] ? "🟢" : "⚫"} ${label}`).join("\n")
+                ).addSeparatorComponents(new SeparatorBuilder())
+                 .addActionRowComponents(new ActionRowBuilder().addComponents(
+                    StringSelectMenuBuilder.from(menu).setOptions(MODULES.map(([value, label]) => ({
+                        label, value, default: filters[value] === true
+                    })))
+                 ))
+                 .addActionRowComponents(buttons);
+                await interaction.update(v2(refreshed));
             });
-
+            collector.on("end", async () => {
+                if (sent.editable) await sent.edit({ components: [] }).catch(() => {});
+            });
             return;
         }
 
-        // ==========================================
-        // 5. SUBCOMMAND: DISABLE
-        // ==========================================
-        if (sub === "disable") {
-
-            const enabled = await db.get(
-                `antinuke_${message.guild.id}`
-            );
-
-            if (!enabled || enabled === false) {
-                return message.reply({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor("#FF7F7F")
-                            .setDescription(
-                                "<a:spider_cross:1514728338701287640> Antinuke system is already **disabled** for this server."
-                            )
-                    ]
-                });
+        if (sub === "disable" || sub === "reset") {
+            await db.set(`antinuke_${guildId}`, false);
+            await db.set(`antinuke_filters_${guildId}`, Object.fromEntries(MODULES.map(([key]) => [key, false])));
+            if (sub === "reset") {
+                for (const key of [
+                    `antinuke_autorecovery_${guildId}`,
+                    `antinuke_extraownerwhitelist_${guildId}`,
+                    `antinuke_limitmode_${guildId}`,
+                    `antinuke_owneronly_${guildId}`,
+                    `antinuke_logging_${guildId}`
+                ]) await db.delete(key);
             }
-
-            const confirmEmbed = new EmbedBuilder()
-                .setColor("#FFCC66")
-                .setDescription(
-`<:WarningIcon:1514708751385497721> Are you sure you want to **DISABLE Antinuke** in this server?
-
-<:arrow:1514699753462566953> This will turn off antinuke for this server.`
-                );
-
-            const confirmRow = new ActionRowBuilder()
-                .addComponents(
-
-                    new ButtonBuilder()
-                        .setCustomId("disable_yes")
-                        .setLabel("Yes")
-                        .setEmoji("1514714209085292564")
-                        .setStyle(ButtonStyle.Success),
-
-                    new ButtonBuilder()
-                        .setCustomId("disable_no")
-                        .setLabel("No")
-                        .setEmoji("1514728338701287640")
-                        .setStyle(ButtonStyle.Danger)
-                );
-
-            const panel = await message.reply({
-                embeds: [confirmEmbed],
-                components: [confirmRow]
-            });
-
-            const collector =
-                panel.createMessageComponentCollector({
-                    componentType: ComponentType.Button,
-                    time: 60000
-                });
-
-            collector.on("collect", async interaction => {
-
-                if (interaction.user.id !== message.author.id) {
-                    return interaction.reply({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("#FF7F7F")
-                                .setDescription(
-                                    "<a:spider_cross:1514728338701287640> This menu isn't yours."
-                                )
-                        ],
-                        ephemeral: true
-                    });
-                }
-
-                collector.stop();
-
-                if (interaction.customId === "disable_yes") {
-
-                    await db.set(
-                        `antinuke_${message.guild.id}`,
-                        false
-                    );
-
-                    await db.set(
-                        `antinuke_filters_${message.guild.id}`,
-                        {
-                            ban: false,
-                            kick: false,
-                            botadd: false,
-                            channeldelete: false,
-                            roledelete: false,
-                            guildupdate: false,
-                            webhook: false,
-                            mention: false
-                        }
-                    );
-
-                    return interaction.update({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("#FF7F7F")
-                                .setTitle(
-                                    "<:shield:1514699900225323108> Antinuke Disabled"
-                                )
-                                .setDescription(
-                                    "<a:spider_cross:1514728338701287640> Antinuke has been **disabled**."
-                                )
-                        ],
-                        components: []
-                    });
-                }
-
-                if (interaction.customId === "disable_no") {
-
-                    return interaction.update({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("#57F287")
-                                .setDescription(
-                                    "<a:Animated_Tick:1514714209085292564> Action aborted. Antinuke protection remains active."
-                                )
-                        ],
-                        components: []
-                    });
-                }
-            });
-
-            collector.on("end", async (collected, reason) => {
-
-                if (reason === "time") {
-
-                    await panel.edit({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("#D3D3D3")
-                                .setDescription(
-                                    "<a:spider_cross:1514728338701287640> Disable confirmation timed out."
-                                )
-                        ],
-                        components: []
-                    }).catch(() => {});
-                }
-            });
+            return message.reply(v2(panel(sub === "reset" ? "Antinuke Reset" : "Antinuke Disabled",
+                sub === "reset" ? "Antinuke has been disabled and its configuration reset." : "Antinuke protection is now disabled.", 0xED4245)));
         }
+
+        if (sub === "autorecovery" || sub === "extraownerwhitelist" || sub === "limitmode" || sub === "owneronly") {
+            const keys = {
+                autorecovery: "antinuke_autorecovery_",
+                extraownerwhitelist: "antinuke_extraownerwhitelist_",
+                limitmode: "antinuke_limitmode_",
+                owneronly: "antinuke_owneronly_"
+            };
+            const key = keys[sub] + guildId;
+            const current = (await db.get(key)) === true;
+            const arg = args[1]?.toLowerCase();
+            const next = arg === "on" || arg === "enable" ? true :
+                arg === "off" || arg === "disable" ? false : !current;
+            await db.set(key, next);
+            return message.reply(v2(panel("Antinuke Setting Updated", `**${sub}:** ${next ? "Enabled" : "Disabled"}` , 0x57F287)));
+        }
+
+        if (sub === "limit") {
+            const target = message.mentions.users.first();
+            const amount = Number(args[target ? 2 : 1]);
+            if (!target || !Number.isInteger(amount) || amount < 1 || amount > 20) {
+                return message.reply(v2(panel("Whitelist Action Limit", "Usage: `,antinuke limit @user <1-20>`\nSets the maximum protected actions allowed in the configured time window.")));
+            }
+            await db.set(`antinuke_limit_${guildId}_${target.id}`, amount);
+            return message.reply(v2(panel("Limit Saved", `Maximum actions for **${target.tag}** set to **${amount}**.`, 0x57F287)));
+        }
+
+        if (sub === "whitelist") {
+            const target = message.mentions.users.first();
+            if (!target) return message.reply(v2(panel("Antinuke Whitelist", "Usage: `,antinuke whitelist @user [add|remove]`")));
+            const action = (args[2] || "add").toLowerCase();
+            const key = `antinuke_whitelist_${guildId}_${target.id}`;
+            if (action === "remove" || action === "delete") await db.delete(key);
+            else await db.set(key, true);
+            return message.reply(v2(panel("Whitelist Updated", `${action === "remove" || action === "delete" ? "Removed" : "Added"} **${target.tag}** ${action === "remove" || action === "delete" ? "from" : "to"} the Antinuke whitelist.`, 0x57F287)));
+        }
+
+        if (sub === "whitelisted") {
+            const rows = [];
+            for (const [key, value] of await db.all()) {
+                const prefix = `antinuke_whitelist_${guildId}_`;
+                if (key.startsWith(prefix) && value) rows.push(`• <@${key.slice(prefix.length)}>`);
+            }
+            return message.reply(v2(panel("Whitelisted Users", rows.length ? rows.join("\n") : "No users are whitelisted.")));
+        }
+
+        return message.reply(v2(panel("Unknown Antinuke Command",
+            "Available: `autorecovery`, `config`, `disable`, `enable`, `extraownerwhitelist`, `limit`, `limitmode`, `logging`, `manage`, `owneronly`, `whitelist`, `whitelisted`, `wizard`.")));
     }
 };
