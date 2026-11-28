@@ -59,7 +59,7 @@ async function showConfig(message) {
     const guildId = message.guild.id;
     const enabled = (await db.get(`antinuke_${guildId}`)) === true;
     const filters = await getFilters(guildId);
-    const lines = MODULES.map(([key, label]) => `${filters[key] ? "🟢" : "⚫"} ${label}`);
+    const lines = MODULES.map(([key, label]) => `${filters[key] ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} ${label}`);
     const logId = await db.get(`antinuke_logging_${guildId}`);
     const logChannel = logId ? message.guild.channels.cache.get(logId) : null;
     const box = panel(
@@ -118,7 +118,7 @@ module.exports = {
             const container = panel(
                 sub === "enable" || sub === "wizard" ? "Antinuke Setup" : "Antinuke Management",
                 "Select the filters below to enable or disable them.\n\n" +
-                MODULES.map(([key, label]) => `${filters[key] ? "🟢" : "⚫"} ${label}`).join("\n")
+                MODULES.map(([key, label]) => `${filters[key] ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} ${label}`).join("\n")
             ).addSeparatorComponents(new SeparatorBuilder())
              .addActionRowComponents(new ActionRowBuilder().addComponents(menu))
              .addActionRowComponents(buttons);
@@ -144,7 +144,7 @@ module.exports = {
                 const refreshed = panel(
                     "Antinuke Management",
                     "Select the filters below to enable or disable them.\n\n" +
-                    MODULES.map(([key, label]) => `${filters[key] ? "🟢" : "⚫"} ${label}`).join("\n")
+                    MODULES.map(([key, label]) => `${filters[key] ? "<:on:1520340385451347968>" : "<:off:1520340423829098597>"} ${label}`).join("\n")
                 ).addSeparatorComponents(new SeparatorBuilder())
                  .addActionRowComponents(new ActionRowBuilder().addComponents(
                     StringSelectMenuBuilder.from(menu).setOptions(MODULES.map(([value, label]) => ({
